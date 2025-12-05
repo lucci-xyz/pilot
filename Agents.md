@@ -8,6 +8,7 @@ Pilot is a budget management app for AI agents. Users create a project, receive 
 
 - **Next.js 16** (App Router) + **TypeScript**
 - **Tailwind CSS 4** + **shadcn/ui**
+- **Prisma 7** + **Neon** (PostgreSQL)
 - **Recharts** for charts
 - **Solana** for USDC vaults (pending integration)
 
@@ -27,33 +28,42 @@ src/
 ├── components/
 │   ├── app/             # App-specific (sidebar, charts, cards)
 │   └── ui/              # shadcn/ui primitives
+├── generated/prisma/    # Generated Prisma client (gitignored)
 └── lib/
-    ├── dummy-data/      # Mock data (to be replaced with real DB)
+    ├── db.ts            # Prisma client singleton
+    ├── dummy-data/      # Mock data (being replaced)
     └── utils.ts         # cn() helper
+
+prisma/
+├── schema.prisma        # Database schema
+└── migrations/          # Migration history
 ```
 
-## Data Model
+## Database
+
+See [`docs/database.md`](docs/database.md) for full schema.
 
 ```
-Workspace
-└── Project
-    ├── Vault { address, balance, limit }
-    ├── Budget { allocated, spent, period }
-    └── Bot (Agent)
-        ├── Budget { allocated, spent }
-        └── Status: active | paused | error | needs_setup
+Project
+├── Vault { address, balance }
+└── Agent[]
+    ├── AgentBudgetRule { dailyLimit, perTxLimit, monthlyLimit }
+    └── Event[] { type: funding|spend, amount, status }
 ```
 
-**Key types**: `src/lib/dummy-data/types.ts`
+**Key rules:**
+- Amounts in minor units (USDC has 6 decimals)
+- Budget tracking: `dailySpent`, `monthlySpent` with reset timestamps
+- Events track all funding and spend activity
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
+| `prisma/schema.prisma` | Database models |
+| `src/lib/db.ts` | Prisma client (Neon adapter) |
 | `app/(dashboard)/layout.tsx` | Dashboard shell with sidebar |
 | `components/app/app-sidebar.tsx` | Main navigation |
-| `components/app/vault-card.tsx` | Balance + budget progress display |
-| `components/app/status-badge.tsx` | Bot status indicators |
 | `app/globals.css` | Theme variables (primary: `#d97757`) |
 
 ## Patterns
@@ -66,16 +76,16 @@ Workspace
 
 ## Current State
 
-- UI is built with **dummy data** — no backend yet
-- Branch `db-schema` indicates DB work in progress
-- Auth is mocked (any login → `/app`)
-- Solana vault integration is **not yet implemented**
+- ✅ Database schema complete (Prisma + Neon)
+- ✅ UI built with dummy data
+- ⏳ Auth is mocked (any login → `/app`)
+- ⏳ Solana vault integration pending
+- ⏳ Wire UI to real database
 
-## Next Steps (Likely)
+## Next Steps
 
-1. Database schema + ORM setup
+1. Wire UI pages to Prisma queries
 2. Solana wallet/vault integration
-3. Real authentication
+3. Real authentication (e.g., NextAuth)
 4. Agent SDK for budget spending
 5. Webhook/API for agent spend tracking
-
