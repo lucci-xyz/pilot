@@ -1,7 +1,8 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { BotStatus } from "@/lib/dummy-data/types";
+
+export type BotStatus = "active" | "paused" | "error" | "needs_setup";
 
 interface StatusBadgeProps {
   status: BotStatus;

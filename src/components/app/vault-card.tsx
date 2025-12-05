@@ -1,7 +1,26 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { Vault, Budget } from "@/lib/dummy-data/types";
+
+export interface Vault {
+  id: string;
+  name: string;
+  balance: number;
+  limit: number;
+  currency: string;
+  lastFourDigits: string;
+  expiryDate: string;
+  type: "credit" | "debit" | "virtual";
+}
+
+export interface Budget {
+  id: string;
+  name: string;
+  allocated: number;
+  spent: number;
+  currency: string;
+  period: "daily" | "weekly" | "monthly" | "yearly";
+}
 
 interface VaultCardProps {
   vault: Vault;

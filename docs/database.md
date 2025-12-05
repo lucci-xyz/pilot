@@ -5,14 +5,48 @@ PostgreSQL via **Prisma 7** + **Neon** (serverless).
 ## Tables
 
 ```
-projects
-├── vaults (1:1)
-└── agents (1:many)
-    ├── agent_budget_rules (1:1)
-    └── events (1:many)
+users
+├── sessions (1:many)
+├── api_keys (1:many)
+└── projects (1:many)
+    └── vaults (1:1)
+        └── events (1:many)
+    └── agents (1:many)
+        ├── agent_budget_rules (1:1)
+        └── events (1:many)
 ```
 
 ## Models
+
+### `users`
+| Column | Type | Notes |
+|--------|------|-------|
+| id | cuid | PK |
+| email | string | Unique |
+| passwordHash | string | SHA-256 hash |
+| name | string | Display name |
+| avatar | string? | Avatar URL |
+
+### `sessions`
+| Column | Type | Notes |
+|--------|------|-------|
+| id | cuid | PK |
+| token | string | Session token (unique) |
+| expiresAt | datetime | Expiration timestamp |
+| userId | string | FK → users |
+
+### `api_keys`
+| Column | Type | Notes |
+|--------|------|-------|
+| id | cuid | PK |
+| name | string | Display name |
+| keyHash | string | SHA-256 hash of key |
+| keyPrefix | string | First 8 chars for display |
+| lastUsedAt | datetime? | Last usage timestamp |
+| expiresAt | datetime? | Expiration (optional) |
+| permissions | string[] | ["read", "write", "execute"] |
+| requestCount | int | API call counter |
+| userId | string | FK → users |
 
 ### `projects`
 | Column | Type | Notes |
@@ -21,6 +55,7 @@ projects
 | name | string | |
 | description | string? | |
 | status | string | `active` / `paused` / `archived` |
+| userId | string | FK → users |
 
 ### `vaults`
 | Column | Type | Notes |
@@ -39,6 +74,7 @@ projects
 | model | string? | `gpt-4o`, `claude-3`, etc. |
 | status | string | `active` / `paused` / `error` / `needs_setup` |
 | apiKeyHash | string? | For agent auth |
+| webhookUrl | string? | Callback URL |
 | projectId | string | FK → projects |
 
 ### `agent_budget_rules`
@@ -68,6 +104,28 @@ projects
 ## Notes
 
 - All amounts in **minor units** (USDC = 6 decimals, so $1.00 = 1000000)
-- Cascade deletes: Project → Vault → Events; Project → Agents → Events
+- Cascade deletes: User → Projects → Vault → Events; User → Projects → Agents → Events
 - Indexed: `events(vaultId, createdAt)`, `events(agentId, createdAt)`, `events(type, createdAt)`
 
+## Database Commands
+
+```bash
+# Run migrations
+npm run db:migrate
+
+# Push schema changes (dev only, no migration)
+npm run db:push
+
+# Seed database with test data
+npm run db:seed
+
+# Reset database and reseed
+npm run db:reset
+```
+
+## Test Credentials
+
+After running `npm run db:seed`:
+
+- **Email:** demo@pilot.app
+- **Password:** password123

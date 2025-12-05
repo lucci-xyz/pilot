@@ -5,9 +5,25 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { currentUser, apiKeys } from "@/lib/dummy-data/users";
+import { requireAuth } from "@/lib/auth";
+import { getUserApiKeys } from "@/lib/data/api-keys";
 
-export default function AccountPage() {
+export default async function AccountPage() {
+  const user = await requireAuth();
+  const apiKeys = await getUserApiKeys(user.id);
+
+  // Transform API keys for the component
+  const formattedApiKeys = apiKeys.map((key) => ({
+    id: key.id,
+    name: key.name,
+    key: `${key.keyPrefix}${"*".repeat(24)}${key.keyPrefix.slice(-4)}`,
+    createdAt: key.createdAt.toISOString(),
+    lastUsed: key.lastUsedAt?.toISOString() ?? null,
+    expiresAt: key.expiresAt?.toISOString() ?? null,
+    permissions: key.permissions,
+    requestCount: key.requestCount,
+  }));
+
   return (
     <>
       <AppHeader title="Account" />
@@ -24,30 +40,30 @@ export default function AccountPage() {
               <div className="rounded-xl border border-neutral-100 bg-white p-6 shadow-soft">
                 <div className="flex items-center gap-4">
                   <Avatar className="h-14 w-14">
-                    <AvatarImage src={currentUser.avatar} alt={currentUser.name} />
+                    <AvatarImage src={user.avatar ?? undefined} alt={user.name} />
                     <AvatarFallback className="text-sm">
-                      {currentUser.name.split(" ").map((n) => n[0]).join("")}
+                      {user.name.split(" ").map((n) => n[0]).join("")}
                     </AvatarFallback>
                   </Avatar>
                   <div>
-                    <p className="text-[15px] font-medium text-neutral-900">{currentUser.name}</p>
-                    <p className="text-[12px] text-neutral-500">{currentUser.email}</p>
+                    <p className="text-[15px] font-medium text-neutral-900">{user.name}</p>
+                    <p className="text-[12px] text-neutral-500">{user.email}</p>
                   </div>
                 </div>
                 <div className="mt-6 grid gap-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <Label className="text-[12px] font-medium text-neutral-600">First name</Label>
-                      <Input defaultValue={currentUser.name.split(" ")[0]} className="h-10 text-[13px]" />
+                      <Input defaultValue={user.name.split(" ")[0]} className="h-10 text-[13px]" />
                     </div>
                     <div className="space-y-1.5">
                       <Label className="text-[12px] font-medium text-neutral-600">Last name</Label>
-                      <Input defaultValue={currentUser.name.split(" ")[1]} className="h-10 text-[13px]" />
+                      <Input defaultValue={user.name.split(" ").slice(1).join(" ")} className="h-10 text-[13px]" />
                     </div>
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-[12px] font-medium text-neutral-600">Email</Label>
-                    <Input defaultValue={currentUser.email} className="h-10 text-[13px]" />
+                    <Input defaultValue={user.email} className="h-10 text-[13px]" disabled />
                   </div>
                 </div>
                 <div className="mt-6 flex justify-end">
@@ -59,7 +75,7 @@ export default function AccountPage() {
             </TabsContent>
 
             <TabsContent value="api-keys" className="space-y-6">
-              <ApiKeysList apiKeys={apiKeys} />
+              <ApiKeysList apiKeys={formattedApiKeys} />
             </TabsContent>
 
             <TabsContent value="security" className="space-y-6">

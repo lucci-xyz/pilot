@@ -3,7 +3,12 @@
 import { Area, AreaChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { ChartDataPoint } from "@/lib/dummy-data/types";
+
+export interface ChartDataPoint {
+  date: string;
+  value: number;
+  label?: string;
+}
 
 interface SpendChartProps {
   dailyData: ChartDataPoint[];

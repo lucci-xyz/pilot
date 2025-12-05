@@ -1,5 +1,5 @@
 // Pilot Database Schema
-// Manages projects, vaults, agents, budgets, and events for AI agent spend tracking
+// Manages users, projects, vaults, agents, budgets, and events for AI agent spend tracking
 
 generator client {
   provider = "prisma-client"
@@ -8,6 +8,59 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+// ============================================================================
+// USER & AUTH
+// ============================================================================
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  avatar       String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  projects Project[]
+  apiKeys  ApiKey[]
+  sessions Session[]
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  // Relations
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@map("sessions")
+}
+
+model ApiKey {
+  id           String    @id @default(cuid())
+  name         String
+  keyHash      String    @unique
+  keyPrefix    String    // First 8 chars for display (e.g., "pk_live_")
+  lastUsedAt   DateTime?
+  expiresAt    DateTime?
+  permissions  String[]  @default(["read", "write"])
+  requestCount Int       @default(0)
+  createdAt    DateTime  @default(now())
+
+  // Relations
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("api_keys")
 }
 
 // ============================================================================
@@ -23,6 +76,8 @@ model Project {
   updatedAt   DateTime @updatedAt
 
   // Relations
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   vault  Vault?
   agents Agent[]
 

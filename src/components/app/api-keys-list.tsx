@@ -10,7 +10,18 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { ApiKey } from "@/lib/dummy-data/types";
+
+export interface ApiKey {
+  id: string;
+  name: string;
+  key: string;
+  createdAt: string;
+  lastUsed: string | null;
+  expiresAt: string | null;
+  permissions: string[];
+  requestCount: number;
+  botId?: string;
+}
 
 interface ApiKeysListProps {
   apiKeys: ApiKey[];

@@ -2,7 +2,19 @@
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
-import { ActivityItem } from "@/lib/dummy-data/types";
+
+export interface ActivityItem {
+  id: string;
+  type: "bot_created" | "budget_updated" | "project_created" | "bot_paused" | "bot_resumed" | "vault_funded" | "api_key_created" | "member_added";
+  title: string;
+  description: string;
+  timestamp: string;
+  user: {
+    name: string;
+    avatar: string;
+  };
+  metadata?: Record<string, unknown>;
+}
 
 interface ActivityFeedProps {
   activities: ActivityItem[];
