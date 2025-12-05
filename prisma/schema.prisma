@@ -1,0 +1,110 @@
+// Pilot Database Schema
+// Manages projects, vaults, agents, budgets, and events for AI agent spend tracking
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================================
+// CORE MODELS
+// ============================================================================
+
+model Project {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  status      String   @default("active") // active, paused, archived
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  vault  Vault?
+  agents Agent[]
+
+  @@map("projects")
+}
+
+model Vault {
+  id            String   @id @default(cuid())
+  address       String   @unique // Solana USDC vault address
+  balance       BigInt   @default(0) // Balance in minor units (USDC has 6 decimals)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  projectId String  @unique
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  events    Event[]
+
+  @@map("vaults")
+}
+
+model Agent {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  provider    String? // e.g., "openai", "anthropic", "custom"
+  model       String? // e.g., "gpt-4o", "claude-3"
+  status      String   @default("needs_setup") // active, paused, error, needs_setup
+  apiKeyHash  String? // Hashed API key for agent authentication
+  webhookUrl  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  projectId  String
+  project    Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  budgetRule AgentBudgetRule?
+  events     Event[]
+
+  @@map("agents")
+}
+
+model AgentBudgetRule {
+  id             String   @id @default(cuid())
+  dailyLimit     BigInt // Max spend per day in minor units
+  perTxLimit     BigInt // Max spend per transaction in minor units
+  monthlyLimit   BigInt? // Optional monthly cap
+  dailySpent     BigInt   @default(0) // Current day's spend
+  monthlySpent   BigInt   @default(0) // Current month's spend
+  lastResetAt    DateTime @default(now()) // Last daily reset timestamp
+  monthResetAt   DateTime @default(now()) // Last monthly reset timestamp
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  agentId String @unique
+  agent   Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@map("agent_budget_rules")
+}
+
+// ============================================================================
+// EVENT TRACKING
+// ============================================================================
+
+model Event {
+  id        String   @id @default(cuid())
+  type      String // "funding" or "spend"
+  amount    BigInt // Amount in minor units (positive for funding, negative for spend)
+  status    String   @default("pending") // pending, confirmed, failed
+  txHash    String? // Solana transaction signature
+  metadata  String? // JSON string for additional data (provider, model, tokens, etc.)
+  createdAt DateTime @default(now())
+
+  // Relations
+  vaultId String
+  vault   Vault  @relation(fields: [vaultId], references: [id], onDelete: Cascade)
+  agentId String?
+  agent   Agent?  @relation(fields: [agentId], references: [id], onDelete: SetNull)
+
+  @@index([vaultId, createdAt])
+  @@index([agentId, createdAt])
+  @@index([type, createdAt])
+  @@map("events")
+}
