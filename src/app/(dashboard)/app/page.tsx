@@ -49,7 +49,7 @@ export default async function AppOverviewPage() {
           {projects.length === 0 && (
             <Announcement 
               message="Welcome to Pilot! Create your first project to get started." 
-              variant="info"
+              variant="warning"
             />
           )}
 
