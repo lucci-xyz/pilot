@@ -9,9 +9,7 @@ export type AgentWithRelations = Agent & {
 export type AgentSummary = {
   id: string;
   name: string;
-  description: string | null;
   provider: string | null;
-  model: string | null;
   status: string;
   createdAt: Date;
   projectId: string;
@@ -50,9 +48,7 @@ export async function getProjectAgents(projectId: string, userId: string): Promi
     return {
       id: agent.id,
       name: agent.name,
-      description: agent.description,
       provider: agent.provider,
-      model: agent.model,
       status: agent.status,
       createdAt: agent.createdAt,
       projectId: agent.projectId,
@@ -92,9 +88,7 @@ export async function createAgent(
   userId: string,
   data: {
     name: string;
-    description?: string;
     provider?: string;
-    model?: string;
     dailyLimit: bigint;
     perTxLimit: bigint;
     monthlyLimit?: bigint;
@@ -110,9 +104,7 @@ export async function createAgent(
   return prisma.agent.create({
     data: {
       name: data.name,
-      description: data.description,
       provider: data.provider,
-      model: data.model,
       status: "needs_setup",
       projectId,
       budgetRule: {

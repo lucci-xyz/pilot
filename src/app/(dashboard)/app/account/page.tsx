@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { requireAuth } from "@/lib/auth";
 import { getUserApiKeys } from "@/lib/data/api-keys";
+import { createApiKeyAction, revokeApiKeyAction } from "@/lib/actions/api-keys";
 
 export default async function AccountPage() {
   const user = await requireAuth();
@@ -22,6 +23,7 @@ export default async function AccountPage() {
     expiresAt: key.expiresAt?.toISOString() ?? null,
     permissions: key.permissions,
     requestCount: key.requestCount,
+    revokeAction: revokeApiKeyAction.bind(null, key.id),
   }));
 
   return (
@@ -75,7 +77,7 @@ export default async function AccountPage() {
             </TabsContent>
 
             <TabsContent value="api-keys" className="space-y-6">
-              <ApiKeysList apiKeys={formattedApiKeys} />
+              <ApiKeysList apiKeys={formattedApiKeys} createAction={createApiKeyAction} />
             </TabsContent>
 
             <TabsContent value="security" className="space-y-6">

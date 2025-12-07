@@ -1,17 +1,25 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Pause, Play, Settings } from "lucide-react";
+import { ArrowLeft, Pause, Play } from "lucide-react";
 import { AppHeader } from "@/components/app/app-header";
 import { StatsCard } from "@/components/app/stats-card";
 import { VaultCard } from "@/components/app/vault-card";
 import { StatusBadge } from "@/components/app/status-badge";
 import { BotSetupSection } from "@/components/app/bot-setup-section";
 import { PerformanceChart } from "@/components/app/performance-chart";
-import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { requireAuth } from "@/lib/auth";
 import { getProject } from "@/lib/data/projects";
 import { getAgent, getAgentPerformance } from "@/lib/data/agents";
+import { AgentStatusForm } from "@/components/app/agent-status-form";
+import { AgentConfigureDialog } from "@/components/app/agent-configure-dialog";
+import { AgentBudgetDialog } from "@/components/app/agent-budget-dialog";
+import {
+  updateAgentBudgetAction,
+  updateAgentDetailsAction,
+  updateAgentStatusAction,
+  updateAgentWebhookAction,
+} from "@/lib/actions/agents";
 
 interface AgentPageProps {
   params: Promise<{ projectId: string; agentId: string }>;
@@ -75,6 +83,9 @@ export default async function AgentPage({ params }: AgentPageProps) {
     period: "daily" as const,
   };
 
+  const toDollars = (value: bigint | number | null | undefined) =>
+    Number(value ?? 0) / 1_000_000;
+
   // Transform performance data for chart
   const chartData = performanceData.map((d) => ({
     date: d.date,
@@ -106,20 +117,30 @@ export default async function AgentPage({ params }: AgentPageProps) {
             </div>
             <div className="flex items-center gap-2">
               {agent.status === "active" ? (
-                <Button variant="outline" size="sm" className="h-8 text-[12px]">
-                  <Pause className="mr-1 h-3.5 w-3.5" strokeWidth={1.5} />
-                  Pause
-                </Button>
+                <AgentStatusForm
+                  action={updateAgentStatusAction.bind(null, agent.id, projectId, "paused")}
+                  label="Pause"
+                  pendingLabel="Pausing..."
+                  variant="outline"
+                  icon={<Pause className="h-3.5 w-3.5" strokeWidth={1.5} />}
+                />
               ) : (
-                <Button variant="outline" size="sm" className="h-8 text-[12px]">
-                  <Play className="mr-1 h-3.5 w-3.5" strokeWidth={1.5} />
-                  Resume
-                </Button>
+                <AgentStatusForm
+                  action={updateAgentStatusAction.bind(null, agent.id, projectId, "active")}
+                  label="Resume"
+                  pendingLabel="Resuming..."
+                  variant="outline"
+                  icon={<Play className="h-3.5 w-3.5" strokeWidth={1.5} />}
+                />
               )}
-              <Button size="sm" className="h-8 bg-neutral-900 text-[12px] hover:bg-neutral-800">
-                <Settings className="mr-1 h-3.5 w-3.5" strokeWidth={1.5} />
-                Configure
-              </Button>
+              <AgentConfigureDialog
+                action={updateAgentDetailsAction.bind(null, agent.id, projectId)}
+                defaultValues={{
+                  name: agent.name,
+                  provider: agent.provider,
+                  model: agent.model,
+                }}
+              />
             </div>
           </div>
 
@@ -151,7 +172,6 @@ export default async function AgentPage({ params }: AgentPageProps) {
                   <div className="mt-4 space-y-3">
                     {[
                       { label: "Status", value: <StatusBadge status={agent.status as "active" | "paused" | "error" | "needs_setup"} /> },
-                      { label: "Model", value: agent.model ?? "Not set" },
                       { label: "Provider", value: agent.provider ?? "Not set" },
                       { label: "Created", value: agent.createdAt.toLocaleDateString() },
                       { label: "Project", value: <Link href={`/app/projects/${projectId}`} className="text-primary hover:underline">{project.name}</Link> },
@@ -167,7 +187,11 @@ export default async function AgentPage({ params }: AgentPageProps) {
             </TabsContent>
 
             <TabsContent value="setup" className="space-y-6">
-              <BotSetupSection botId={agent.id} webhookUrl={agent.webhookUrl ?? undefined} />
+              <BotSetupSection
+                botId={agent.id}
+                webhookUrl={agent.webhookUrl ?? undefined}
+                webhookAction={updateAgentWebhookAction.bind(null, agent.id, projectId)}
+              />
             </TabsContent>
 
             <TabsContent value="budget" className="space-y-6">
@@ -200,7 +224,16 @@ export default async function AgentPage({ params }: AgentPageProps) {
                     )}
                   </div>
                   <div className="mt-6 flex gap-2">
-                    <Button size="sm" className="h-8 text-[12px]">Adjust limits</Button>
+                    <AgentBudgetDialog
+                      action={updateAgentBudgetAction.bind(null, agent.id, projectId)}
+                      defaults={{
+                        dailyLimit: toDollars(agent.budgetRule?.dailyLimit ?? 0),
+                        perTxLimit: toDollars(agent.budgetRule?.perTxLimit ?? 0),
+                        monthlyLimit: agent.budgetRule?.monthlyLimit
+                          ? toDollars(agent.budgetRule?.monthlyLimit)
+                          : null,
+                      }}
+                    />
                   </div>
                 </div>
               </div>

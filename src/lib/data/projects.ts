@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/db";
+import { generateSolanaVaultKeypair } from "@/lib/solana";
 import { Project, Vault, Agent, AgentBudgetRule, Event } from "@/generated/prisma/client";
+import { randomAvatarKey, ProjectAvatarKey } from "@/lib/project-avatars";
 
 export type ProjectWithRelations = Project & {
   vault: Vault | null;
@@ -14,6 +16,7 @@ export type ProjectSummary = {
   name: string;
   description: string | null;
   status: string;
+  avatar: ProjectAvatarKey | null;
   createdAt: Date;
   vaultBalance: bigint;
   agentCount: number;
@@ -58,6 +61,7 @@ export async function getUserProjects(userId: string): Promise<ProjectSummary[]>
       name: project.name,
       description: project.description,
       status: project.status,
+      avatar: (project as Project & { avatar?: ProjectAvatarKey | null }).avatar ?? null,
       createdAt: project.createdAt,
       vaultBalance: project.vault?.balance ?? BigInt(0),
       agentCount: project.agents.length,
@@ -150,17 +154,19 @@ export async function createProject(
     description?: string;
   }
 ): Promise<Project> {
-  // Generate a unique vault address (in production, this would be a real Solana address)
-  const vaultAddress = `vault_${crypto.randomUUID().replace(/-/g, "")}`;
+  const { address, encryptedPrivateKey } = generateSolanaVaultKeypair();
+  const avatarKey = randomAvatarKey();
 
   return prisma.project.create({
     data: {
       name: data.name,
       description: data.description,
       userId,
+      avatar: avatarKey,
       vault: {
         create: {
-          address: vaultAddress,
+          address,
+          encryptedPrivateKey,
           balance: BigInt(0),
         },
       },

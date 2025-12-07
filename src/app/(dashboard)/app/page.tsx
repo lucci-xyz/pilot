@@ -1,11 +1,12 @@
 import Link from "next/link";
-import { ChevronRight, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { AppHeader } from "@/components/app/app-header";
 import { Announcement } from "@/components/app/announcement";
 import { StatsCard } from "@/components/app/stats-card";
 import { ActivityFeed } from "@/components/app/activity-feed";
 import { SpendChart } from "@/components/app/spend-chart";
 import { ComparisonChart } from "@/components/app/comparison-chart";
+import { ProjectList } from "@/components/app/project-list";
 import { Button } from "@/components/ui/button";
 import { requireAuth } from "@/lib/auth";
 import { getUserProjects, getUserProjectStats } from "@/lib/data/projects";
@@ -16,8 +17,18 @@ export default async function AppOverviewPage() {
   const projects = await getUserProjects(user.id);
   const stats = await getUserProjectStats(user.id);
   const activities = await getUserActivity(user.id, 5);
-  const spendData = await getUserSpendChartData(user.id, 30);
+  const { dailyData, weeklyData, monthlyData } = await getUserSpendChartData(user.id, 30);
   const comparisonData = await getProjectComparisonData(user.id);
+
+  const projectCards = projects.map((project) => ({
+    id: project.id,
+    name: project.name,
+    agentCount: project.agentCount,
+    avatar: project.avatar,
+    monthlySpent: typeof project.monthlySpent === "bigint"
+      ? Number(project.monthlySpent)
+      : project.monthlySpent,
+  }));
 
   const formatCurrency = (amount: number | bigint) => {
     const value = typeof amount === "bigint" ? Number(amount) / 1_000_000 : amount;
@@ -74,9 +85,9 @@ export default async function AppOverviewPage() {
           {projects.length > 0 && (
             <div className="grid gap-6 lg:grid-cols-2">
               <SpendChart
-                dailyData={spendData}
-                weeklyData={[]}
-                monthlyData={[]}
+                dailyData={dailyData}
+                weeklyData={weeklyData}
+                monthlyData={monthlyData}
               />
               <ComparisonChart data={comparisonData} />
             </div>
@@ -96,39 +107,7 @@ export default async function AppOverviewPage() {
                 </Link>
               </div>
               <div className="mt-4 space-y-2">
-                {projects.length === 0 ? (
-                  <p className="text-center py-8 text-[13px] text-neutral-500">
-                    No projects yet. Create one to get started!
-                  </p>
-                ) : (
-                  projects.map((project) => (
-                    <Link
-                      key={project.id}
-                      href={`/app/projects/${project.id}`}
-                      className="flex items-center justify-between rounded-lg p-3 transition-colors hover:bg-neutral-50"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-neutral-100 to-neutral-200 text-[12px] font-medium text-neutral-600">
-                          {project.name.charAt(0)}
-                        </div>
-                        <div>
-                          <p className="text-[13px] font-medium text-neutral-900">
-                            {project.name}
-                          </p>
-                          <p className="text-[11px] text-neutral-400">
-                            {project.agentCount} agents
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <p className="text-[13px] font-medium text-neutral-700">
-                          {formatCurrency(project.monthlySpent)}
-                        </p>
-                        <ChevronRight className="h-4 w-4 text-neutral-300" strokeWidth={1.5} />
-                      </div>
-                    </Link>
-                  ))
-                )}
+                <ProjectList projects={projectCards} />
               </div>
             </div>
 

@@ -42,6 +42,7 @@ export function ComparisonChart({
               width={100}
             />
             <Tooltip
+              cursor={false}
               content={({ active, payload }) => {
                 if (active && payload && payload.length) {
                   return (
@@ -58,6 +59,7 @@ export function ComparisonChart({
               fill="#d97757"
               radius={[0, 4, 4, 0]}
               barSize={16}
+              activeBar={false}
             />
           </BarChart>
         </ResponsiveContainer>

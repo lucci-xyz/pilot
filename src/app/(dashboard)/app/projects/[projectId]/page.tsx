@@ -4,6 +4,7 @@ import { ChevronRight, Plus, ArrowLeft } from "lucide-react";
 import { AppHeader } from "@/components/app/app-header";
 import { StatsCard } from "@/components/app/stats-card";
 import { VaultCard } from "@/components/app/vault-card";
+import { VaultAddress } from "@/components/app/vault-address";
 import { SpendChart } from "@/components/app/spend-chart";
 import { ComparisonChart } from "@/components/app/comparison-chart";
 import { StatusBadge } from "@/components/app/status-badge";
@@ -29,7 +30,7 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
 
   const agents = await getProjectAgents(projectId, user.id);
   const activities = await getProjectActivity(projectId, user.id);
-  const spendData = await getUserSpendChartData(user.id, 30);
+  const { dailyData, weeklyData, monthlyData } = await getUserSpendChartData(user.id, 30);
 
   const formatCurrency = (amount: number | bigint) => {
     const value = typeof amount === "bigint" ? Number(amount) / 1_000_000 : amount;
@@ -57,7 +58,7 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
     balance: Number(project.vault?.balance ?? 0) / 1_000_000,
     limit: 100000,
     currency: "USD",
-    lastFourDigits: project.vault?.address.slice(-4) ?? "0000",
+    lastFourDigits: project.vault?.address?.slice(-4) ?? "0000",
     expiryDate: "N/A",
     type: "virtual" as const,
   };
@@ -101,12 +102,59 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
             <StatsCard title="Status" value={project.status} />
           </div>
 
-          <Tabs defaultValue="agents" className="space-y-6">
+          <Tabs defaultValue="budget" className="space-y-6">
             <TabsList className="h-9 bg-neutral-100/50 p-1">
-              <TabsTrigger value="agents" className="text-[12px]">Agents</TabsTrigger>
-              <TabsTrigger value="analytics" className="text-[12px]">Analytics</TabsTrigger>
               <TabsTrigger value="budget" className="text-[12px]">Budget</TabsTrigger>
+              <TabsTrigger value="analytics" className="text-[12px]">Analytics</TabsTrigger>
+              <TabsTrigger value="agents" className="text-[12px]">Agents</TabsTrigger>
             </TabsList>
+
+            <TabsContent value="analytics" className="space-y-6">
+              <div className="grid gap-6 lg:grid-cols-2">
+                <SpendChart dailyData={dailyData} weeklyData={weeklyData} monthlyData={monthlyData} />
+                <ComparisonChart data={agentComparisonData} title="By agent" />
+              </div>
+            </TabsContent>
+
+            <TabsContent value="budget" className="space-y-6">
+              <div className="grid gap-6 lg:grid-cols-2">
+                <div className="space-y-3">
+                  <VaultCard vault={vaultData} budget={budgetData} />
+                  <VaultAddress address={project.vault?.address} />
+                </div>
+                <div className="rounded-xl border border-neutral-100 bg-white p-5 shadow-soft">
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-400">
+                    Recent Activity
+                  </p>
+                  <div className="mt-4 space-y-2">
+                    {activities.length === 0 ? (
+                      <p className="text-[13px] text-neutral-500">No recent activity</p>
+                    ) : (
+                      activities.slice(0, 5).map((activity) => (
+                        <div
+                          key={activity.id}
+                          className="flex items-center justify-between py-2 text-[12px]"
+                        >
+                          <div>
+                            <p className="text-neutral-700">
+                              {activity.type === "funding" ? "Funded" : "Spent"} by{" "}
+                              {activity.agentName ?? "Unknown"}
+                            </p>
+                            <p className="text-neutral-400">
+                              {activity.createdAt.toLocaleDateString()}
+                            </p>
+                          </div>
+                          <p className={activity.type === "funding" ? "text-emerald-600" : "text-neutral-700"}>
+                            {activity.type === "funding" ? "+" : "-"}
+                            {formatCurrency(BigInt(Math.abs(Number(activity.amount))))}
+                          </p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            </TabsContent>
 
             <TabsContent value="agents" className="space-y-4">
               <div className="flex items-center justify-between">
@@ -155,54 +203,6 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
                   ))}
                 </div>
               )}
-            </TabsContent>
-
-            <TabsContent value="analytics" className="space-y-6">
-              <div className="grid gap-6 lg:grid-cols-2">
-                <SpendChart
-                  dailyData={spendData}
-                  weeklyData={[]}
-                  monthlyData={[]}
-                />
-                <ComparisonChart data={agentComparisonData} title="By agent" />
-              </div>
-            </TabsContent>
-
-            <TabsContent value="budget" className="space-y-6">
-              <div className="grid gap-6 lg:grid-cols-2">
-                <VaultCard vault={vaultData} budget={budgetData} />
-                <div className="rounded-xl border border-neutral-100 bg-white p-5 shadow-soft">
-                  <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-400">
-                    Recent Activity
-                  </p>
-                  <div className="mt-4 space-y-2">
-                    {activities.length === 0 ? (
-                      <p className="text-[13px] text-neutral-500">No recent activity</p>
-                    ) : (
-                      activities.slice(0, 5).map((activity) => (
-                        <div
-                          key={activity.id}
-                          className="flex items-center justify-between py-2 text-[12px]"
-                        >
-                          <div>
-                            <p className="text-neutral-700">
-                              {activity.type === "funding" ? "Funded" : "Spent"} by{" "}
-                              {activity.agentName ?? "Unknown"}
-                            </p>
-                            <p className="text-neutral-400">
-                              {activity.createdAt.toLocaleDateString()}
-                            </p>
-                          </div>
-                          <p className={activity.type === "funding" ? "text-emerald-600" : "text-neutral-700"}>
-                            {activity.type === "funding" ? "+" : "-"}
-                            {formatCurrency(BigInt(Math.abs(Number(activity.amount))))}
-                          </p>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              </div>
             </TabsContent>
           </Tabs>
         </div>

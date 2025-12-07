@@ -37,6 +37,7 @@ export function SpendChart({
           {(["daily", "weekly", "monthly"] as const).map((p) => (
             <button
               key={p}
+              type="button"
               onClick={() => setPeriod(p)}
               className={cn(
                 "rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors",
@@ -44,8 +45,9 @@ export function SpendChart({
                   ? "bg-white text-neutral-900 shadow-sm"
                   : "text-neutral-500 hover:text-neutral-700"
               )}
+              aria-pressed={period === p}
             >
-              {p.charAt(0).toUpperCase() + p.slice(1, 2)}
+              {p === "daily" ? "Daily" : p === "weekly" ? "Weekly" : "Monthly"}
             </button>
           ))}
         </div>

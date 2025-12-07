@@ -32,6 +32,7 @@ import {
 import { SafeUser } from "@/lib/auth";
 import { ProjectSummary } from "@/lib/data/projects";
 import { logoutAction } from "@/lib/actions/auth";
+import { ProjectAvatar } from "@/components/app/project-avatar";
 
 const mainNavItems = [
   { title: "Overview", url: "/app", icon: LayoutGrid },
@@ -113,9 +114,7 @@ export function AppSidebar({ user, projects }: AppSidebarProps) {
                       className="h-9 gap-2.5 rounded-lg px-3 text-[13px] font-normal text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 data-[active=true]:bg-neutral-100 data-[active=true]:text-neutral-900"
                     >
                       <Link href={`/app/projects/${project.id}`}>
-                        <div className="flex h-5 w-5 items-center justify-center rounded-md bg-gradient-to-br from-neutral-100 to-neutral-200 text-[10px] font-medium text-neutral-600">
-                          {project.name.charAt(0)}
-                        </div>
+                        <ProjectAvatar projectId={project.id} avatarKey={project.avatar ?? undefined} size={20} className="shrink-0" />
                         <span className="flex-1 truncate">{project.name}</span>
                         <ChevronRight className="h-3.5 w-3.5 text-neutral-300" strokeWidth={1.5} />
                       </Link>

@@ -3,6 +3,7 @@ import { PrismaNeon } from "@prisma/adapter-neon";
 import { neonConfig } from "@neondatabase/serverless";
 import { config } from "dotenv";
 import ws from "ws";
+import { generateSolanaVaultKeypair } from "../src/lib/solana";
 
 // Load environment variables
 config();
@@ -56,6 +57,9 @@ async function main() {
 
   // Create projects
   console.log("Creating projects...");
+  const vault1 = generateSolanaVaultKeypair();
+  const vault2 = generateSolanaVaultKeypair();
+  const vault3 = generateSolanaVaultKeypair();
   const project1 = await prisma.project.create({
     data: {
       name: "Customer Support",
@@ -64,7 +68,8 @@ async function main() {
       userId: user.id,
       vault: {
         create: {
-          address: `vault_${crypto.randomUUID().replace(/-/g, "")}`,
+          address: vault1.address,
+          encryptedPrivateKey: vault1.encryptedPrivateKey,
           balance: BigInt(50_000_000_000), // $50,000
         },
       },
@@ -80,7 +85,8 @@ async function main() {
       userId: user.id,
       vault: {
         create: {
-          address: `vault_${crypto.randomUUID().replace(/-/g, "")}`,
+          address: vault2.address,
+          encryptedPrivateKey: vault2.encryptedPrivateKey,
           balance: BigInt(25_000_000_000), // $25,000
         },
       },
@@ -96,7 +102,8 @@ async function main() {
       userId: user.id,
       vault: {
         create: {
-          address: `vault_${crypto.randomUUID().replace(/-/g, "")}`,
+          address: vault3.address,
+          encryptedPrivateKey: vault3.encryptedPrivateKey,
           balance: BigInt(15_000_000_000), // $15,000
         },
       },
@@ -111,9 +118,7 @@ async function main() {
   const agent1 = await prisma.agent.create({
     data: {
       name: "Ticket Classifier",
-      description: "Automatically classifies and routes support tickets",
       provider: "openai",
-      model: "gpt-4o",
       status: "active",
       projectId: project1.id,
       budgetRule: {
@@ -131,9 +136,7 @@ async function main() {
   const agent2 = await prisma.agent.create({
     data: {
       name: "FAQ Responder",
-      description: "Answers common customer questions automatically",
       provider: "openai",
-      model: "gpt-4o-mini",
       status: "active",
       projectId: project1.id,
       budgetRule: {
@@ -148,12 +151,10 @@ async function main() {
     },
   });
 
-  const agent3 = await prisma.agent.create({
+  await prisma.agent.create({
     data: {
       name: "Sentiment Analyzer",
-      description: "Analyzes customer sentiment in real-time",
       provider: "anthropic",
-      model: "claude-3-sonnet",
       status: "paused",
       projectId: project1.id,
       budgetRule: {
@@ -171,9 +172,7 @@ async function main() {
   const agent4 = await prisma.agent.create({
     data: {
       name: "Blog Writer",
-      description: "Generates SEO-optimized blog posts",
       provider: "openai",
-      model: "gpt-4o",
       status: "active",
       projectId: project2.id,
       budgetRule: {
@@ -191,9 +190,7 @@ async function main() {
   const agent5 = await prisma.agent.create({
     data: {
       name: "Social Media Bot",
-      description: "Creates social media content",
       provider: "openai",
-      model: "gpt-4o-mini",
       status: "active",
       projectId: project2.id,
       budgetRule: {
@@ -208,12 +205,10 @@ async function main() {
   });
 
   // Create agent for project 3
-  const agent6 = await prisma.agent.create({
+  await prisma.agent.create({
     data: {
       name: "Report Generator",
-      description: "Creates automated data reports",
       provider: "openai",
-      model: "gpt-4o",
       status: "needs_setup",
       projectId: project3.id,
       budgetRule: {

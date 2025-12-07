@@ -72,6 +72,7 @@ model Project {
   name        String
   description String?
   status      String   @default("active") // active, paused, archived
+  avatar      String?  @map("avatar")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -87,6 +88,7 @@ model Project {
 model Vault {
   id            String   @id @default(cuid())
   address       String   @unique // Solana USDC vault address
+  encryptedPrivateKey String // Encrypted Solana private key (AES-256-GCM)
   balance       BigInt   @default(0) // Balance in minor units (USDC has 6 decimals)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -102,9 +104,7 @@ model Vault {
 model Agent {
   id          String   @id @default(cuid())
   name        String
-  description String?
   provider    String? // e.g., "openai", "anthropic", "custom"
-  model       String? // e.g., "gpt-4o", "claude-3"
   status      String   @default("needs_setup") // active, paused, error, needs_setup
   apiKeyHash  String? // Hashed API key for agent authentication
   webhookUrl  String?

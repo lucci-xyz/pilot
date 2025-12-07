@@ -26,6 +26,8 @@ users
 | passwordHash | string | SHA-256 hash |
 | name | string | Display name |
 | avatar | string? | Avatar URL |
+| createdAt | datetime | |
+| updatedAt | datetime | |
 
 ### `sessions`
 | Column | Type | Notes |
@@ -33,6 +35,7 @@ users
 | id | cuid | PK |
 | token | string | Session token (unique) |
 | expiresAt | datetime | Expiration timestamp |
+| createdAt | datetime | |
 | userId | string | FK → users |
 
 ### `api_keys`
@@ -46,6 +49,7 @@ users
 | expiresAt | datetime? | Expiration (optional) |
 | permissions | string[] | ["read", "write", "execute"] |
 | requestCount | int | API call counter |
+| createdAt | datetime | |
 | userId | string | FK → users |
 
 ### `projects`
@@ -54,16 +58,22 @@ users
 | id | cuid | PK |
 | name | string | |
 | description | string? | |
-| status | string | `active` / `paused` / `archived` |
+| status | string | `active` / `paused` / `archived` (default `active`) |
+| avatar | string? | Assigned avatar key |
 | userId | string | FK → users |
+| createdAt | datetime | |
+| updatedAt | datetime | |
 
 ### `vaults`
 | Column | Type | Notes |
 |--------|------|-------|
 | id | cuid | PK |
 | address | string | Solana USDC address (unique) |
+| encryptedPrivateKey | string | AES-256-GCM encrypted Solana private key |
 | balance | bigint | Minor units (6 decimals) |
 | projectId | string | FK → projects |
+| createdAt | datetime | |
+| updatedAt | datetime | |
 
 ### `agents`
 | Column | Type | Notes |
@@ -71,11 +81,12 @@ users
 | id | cuid | PK |
 | name | string | |
 | provider | string? | `openai`, `anthropic`, etc. |
-| model | string? | `gpt-4o`, `claude-3`, etc. |
-| status | string | `active` / `paused` / `error` / `needs_setup` |
+| status | string | `active` / `paused` / `error` / `needs_setup` (default `needs_setup`) |
 | apiKeyHash | string? | For agent auth |
 | webhookUrl | string? | Callback URL |
 | projectId | string | FK → projects |
+| createdAt | datetime | |
+| updatedAt | datetime | |
 
 ### `agent_budget_rules`
 | Column | Type | Notes |
@@ -87,6 +98,9 @@ users
 | dailySpent | bigint | Tracks current day spend |
 | monthlySpent | bigint | Tracks current month spend |
 | lastResetAt | datetime | For daily reset logic |
+| monthResetAt | datetime | For monthly reset logic |
+| createdAt | datetime | |
+| updatedAt | datetime | |
 | agentId | string | FK → agents (unique) |
 
 ### `events`
@@ -100,10 +114,12 @@ users
 | metadata | string? | JSON (tokens, model, etc.) |
 | vaultId | string | FK → vaults |
 | agentId | string? | FK → agents (nullable) |
+| createdAt | datetime | |
 
 ## Notes
 
 - All amounts in **minor units** (USDC = 6 decimals, so $1.00 = 1000000)
+- Vault private keys are encrypted with `VAULT_ENCRYPTION_KEY` before storage
 - Cascade deletes: User → Projects → Vault → Events; User → Projects → Agents → Events
 - Indexed: `events(vaultId, createdAt)`, `events(agentId, createdAt)`, `events(type, createdAt)`
 
