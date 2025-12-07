@@ -17,26 +17,29 @@ Pilot is a budget management app for AI agents. Users create a project, receive 
 ```
 src/
 ├── app/
-│   ├── (auth)/          # Login, signup, forgot-password
-│   ├── (dashboard)/     # Main app (has sidebar)
+│   ├── (auth)/              # Login, signup, forgot-password
+│   ├── (dashboard)/         # Main app (requires auth)
 │   │   └── app/
-│   │       ├── page.tsx           # Overview dashboard
-│   │       ├── account/           # User settings, API keys
-│   │       ├── billing/           # Subscription management
-│   │       └── workspaces/[id]/   # Workspace → Project → Bot pages
-│   └── layout.tsx       # Root layout (fonts, metadata)
+│   │       ├── page.tsx             # Overview dashboard
+│   │       ├── account/             # User settings, API keys
+│   │       ├── billing/             # Usage & plan
+│   │       └── projects/[id]/       # Project → Agent pages
+│   └── layout.tsx           # Root layout
 ├── components/
-│   ├── app/             # App-specific (sidebar, charts, cards)
-│   └── ui/              # shadcn/ui primitives
-├── generated/prisma/    # Generated Prisma client (gitignored)
+│   ├── app/                 # App-specific (sidebar, charts, cards)
+│   └── ui/                  # shadcn/ui primitives
+├── generated/prisma/        # Generated Prisma client
 └── lib/
-    ├── db.ts            # Prisma client singleton
-    ├── dummy-data/      # Mock data (being replaced)
-    └── utils.ts         # cn() helper
+    ├── auth.ts              # Auth helpers
+    ├── db.ts                # Prisma client
+    ├── data/                # Data access layer
+    ├── actions/             # Server actions
+    └── utils.ts             # cn() helper
 
 prisma/
-├── schema.prisma        # Database schema
-└── migrations/          # Migration history
+├── schema.prisma            # Database schema
+├── seed.ts                  # Seed script
+└── migrations/              # Migration history
 ```
 
 ## Database
@@ -44,15 +47,18 @@ prisma/
 See [`docs/database.md`](docs/database.md) for full schema.
 
 ```
-Project
-├── Vault { address, balance }
-└── Agent[]
-    ├── AgentBudgetRule { dailyLimit, perTxLimit, monthlyLimit }
-    └── Event[] { type: funding|spend, amount, status }
+User
+├── Session[]
+├── ApiKey[]
+└── Project[]
+    ├── Vault { address, balance }
+    └── Agent[]
+        ├── AgentBudgetRule { dailyLimit, perTxLimit, monthlyLimit }
+        └── Event[] { type: funding|spend, amount, status }
 ```
 
 **Key rules:**
-- Amounts in minor units (USDC has 6 decimals)
+- Amounts in minor units (USDC has 6 decimals, so $1.00 = 1000000)
 - Budget tracking: `dailySpent`, `monthlySpent` with reset timestamps
 - Events track all funding and spend activity
 
@@ -61,31 +67,40 @@ Project
 | File | Purpose |
 |------|---------|
 | `prisma/schema.prisma` | Database models |
-| `src/lib/db.ts` | Prisma client (Neon adapter) |
-| `app/(dashboard)/layout.tsx` | Dashboard shell with sidebar |
+| `src/lib/auth.ts` | Authentication helpers |
+| `src/lib/data/*.ts` | Data access functions |
+| `app/(dashboard)/layout.tsx` | Dashboard shell (requires auth) |
 | `components/app/app-sidebar.tsx` | Main navigation |
-| `app/globals.css` | Theme variables (primary: `#d97757`) |
 
 ## Patterns
 
-- **Route groups**: `(auth)` = no sidebar, `(dashboard)` = with sidebar
-- **Dynamic routes**: `[workspaceId]`, `[projectId]`, `[botId]`
+- **Route groups**: `(auth)` = no sidebar, `(dashboard)` = with sidebar + auth required
+- **Dynamic routes**: `[projectId]`, `[agentId]`
 - **Currency formatting**: Use `Intl.NumberFormat` with USD
 - **Status colors**: Green (active), Yellow (paused), Red (error), Gray (needs_setup)
-- **Shadows**: Use `shadow-soft`, `shadow-soft-md`, `shadow-soft-lg`
+- **Auth**: Use `requireAuth()` in server components
+
+## Commands
+
+```bash
+npm run dev          # Start dev server
+npm run db:migrate   # Run migrations
+npm run db:seed      # Seed database
+npm run db:reset     # Reset + reseed database
+```
 
 ## Current State
 
 - ✅ Database schema complete (Prisma + Neon)
-- ✅ UI built with dummy data
-- ⏳ Auth is mocked (any login → `/app`)
+- ✅ Authentication (cookie-based sessions)
+- ✅ UI wired to real database
+- ✅ Seed script with test data
 - ⏳ Solana vault integration pending
-- ⏳ Wire UI to real database
+- ⏳ Agent SDK for budget spending
 
 ## Next Steps
 
-1. Wire UI pages to Prisma queries
-2. Solana wallet/vault integration
-3. Real authentication (e.g., NextAuth)
-4. Agent SDK for budget spending
-5. Webhook/API for agent spend tracking
+1. Solana wallet/vault integration
+2. Agent SDK for budget spending
+3. Webhook/API for agent spend tracking
+4. Budget alerts and notifications

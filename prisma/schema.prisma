@@ -1,5 +1,5 @@
 // Pilot Database Schema
-// Manages projects, vaults, agents, budgets, and events for AI agent spend tracking
+// Manages users, projects, vaults, agents, budgets, and events for AI agent spend tracking
 
 generator client {
   provider = "prisma-client"
@@ -11,6 +11,59 @@ datasource db {
 }
 
 // ============================================================================
+// USER & AUTH
+// ============================================================================
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  avatar       String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  projects Project[]
+  apiKeys  ApiKey[]
+  sessions Session[]
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  // Relations
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@map("sessions")
+}
+
+model ApiKey {
+  id           String    @id @default(cuid())
+  name         String
+  keyHash      String    @unique
+  keyPrefix    String    // First 8 chars for display (e.g., "pk_live_")
+  lastUsedAt   DateTime?
+  expiresAt    DateTime?
+  permissions  String[]  @default(["read", "write"])
+  requestCount Int       @default(0)
+  createdAt    DateTime  @default(now())
+
+  // Relations
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("api_keys")
+}
+
+// ============================================================================
 // CORE MODELS
 // ============================================================================
 
@@ -19,10 +72,13 @@ model Project {
   name        String
   description String?
   status      String   @default("active") // active, paused, archived
+  avatar      String?  @map("avatar")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   // Relations
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   vault  Vault?
   agents Agent[]
 
@@ -32,6 +88,7 @@ model Project {
 model Vault {
   id            String   @id @default(cuid())
   address       String   @unique // Solana USDC vault address
+  encryptedPrivateKey String // Encrypted Solana private key (AES-256-GCM)
   balance       BigInt   @default(0) // Balance in minor units (USDC has 6 decimals)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -47,9 +104,7 @@ model Vault {
 model Agent {
   id          String   @id @default(cuid())
   name        String
-  description String?
   provider    String? // e.g., "openai", "anthropic", "custom"
-  model       String? // e.g., "gpt-4o", "claude-3"
   status      String   @default("needs_setup") // active, paused, error, needs_setup
   apiKeyHash  String? // Hashed API key for agent authentication
   webhookUrl  String?

@@ -1,26 +1,39 @@
-import { Check, Download } from "lucide-react";
+import { Check } from "lucide-react";
 import { AppHeader } from "@/components/app/app-header";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { billingHistory, billingPlan } from "@/lib/dummy-data/billing";
-import { workspaces } from "@/lib/dummy-data/workspaces";
+import { requireAuth } from "@/lib/auth";
+import { getUserProjects, getUserProjectStats } from "@/lib/data/projects";
 import { cn } from "@/lib/utils";
 
-export default function BillingPage() {
-  const formatCurrency = (amount: number) => {
+export default async function BillingPage() {
+  const user = await requireAuth();
+  const projects = await getUserProjects(user.id);
+  const stats = await getUserProjectStats(user.id);
+
+  const formatCurrency = (amount: number | bigint) => {
+    const value = typeof amount === "bigint" ? Number(amount) / 1_000_000 : amount;
     return new Intl.NumberFormat("en-US", {
       style: "currency",
       currency: "USD",
       minimumFractionDigits: 0,
-    }).format(amount);
+    }).format(value);
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
+  // Plan information (could be stored in user model in future)
+  const billingPlan = {
+    name: "Free",
+    price: 0,
+    features: [
+      "Up to 3 projects",
+      "Up to 10 agents",
+      "Basic analytics",
+      "Email support",
+    ],
+    usage: {
+      projects: { used: stats.totalProjects, limit: 3 },
+      agents: { used: stats.totalAgents, limit: 10 },
+    },
   };
 
   return (
@@ -46,9 +59,18 @@ export default function BillingPage() {
 
             <div className="mt-6 grid gap-3">
               {[
-                { label: "Bots", used: billingPlan.usage.bots.used, limit: billingPlan.usage.bots.limit },
-                { label: "API calls", used: `${(billingPlan.usage.apiCalls.used / 1000000).toFixed(1)}M`, limit: `${(billingPlan.usage.apiCalls.limit / 1000000)}M`, percent: (billingPlan.usage.apiCalls.used / billingPlan.usage.apiCalls.limit) * 100 },
-                { label: "Storage", used: `${billingPlan.usage.storage.used}GB`, limit: `${billingPlan.usage.storage.limit}GB`, percent: (billingPlan.usage.storage.used / billingPlan.usage.storage.limit) * 100 },
+                { 
+                  label: "Projects", 
+                  used: billingPlan.usage.projects.used, 
+                  limit: billingPlan.usage.projects.limit,
+                  percent: (billingPlan.usage.projects.used / billingPlan.usage.projects.limit) * 100
+                },
+                { 
+                  label: "Agents", 
+                  used: billingPlan.usage.agents.used, 
+                  limit: billingPlan.usage.agents.limit,
+                  percent: (billingPlan.usage.agents.used / billingPlan.usage.agents.limit) * 100
+                },
               ].map((item) => (
                 <div key={item.label} className="space-y-1.5">
                   <div className="flex items-center justify-between text-[12px]">
@@ -58,7 +80,7 @@ export default function BillingPage() {
                   <div className="h-1.5 overflow-hidden rounded-full bg-neutral-100">
                     <div
                       className="h-full rounded-full bg-primary"
-                      style={{ width: `${item.percent || (typeof item.used === 'number' ? (item.used / (item.limit as number)) * 100 : 50)}%` }}
+                      style={{ width: `${Math.min(item.percent, 100)}%` }}
                     />
                   </div>
                 </div>
@@ -70,7 +92,7 @@ export default function BillingPage() {
                 Features
               </p>
               <div className="grid grid-cols-2 gap-2">
-                {billingPlan.features.slice(0, 6).map((feature) => (
+                {billingPlan.features.map((feature) => (
                   <div key={feature} className="flex items-center gap-2 text-[12px] text-neutral-600">
                     <Check className="h-3.5 w-3.5 text-emerald-500" strokeWidth={1.5} />
                     {feature}
@@ -83,78 +105,73 @@ export default function BillingPage() {
               <Button className="h-9 bg-neutral-900 text-[12px] hover:bg-neutral-800">
                 Upgrade
               </Button>
-              <Button variant="outline" className="h-9 text-[12px]">
-                Cancel
-              </Button>
             </div>
           </div>
 
-          <Tabs defaultValue="history" className="space-y-6">
+          <Tabs defaultValue="usage" className="space-y-6">
             <TabsList className="h-9 bg-neutral-100/50 p-1">
-              <TabsTrigger value="history" className="text-[12px]">History</TabsTrigger>
-              <TabsTrigger value="workspaces" className="text-[12px]">By workspace</TabsTrigger>
+              <TabsTrigger value="usage" className="text-[12px]">Usage</TabsTrigger>
+              <TabsTrigger value="projects" className="text-[12px]">By project</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="history">
-              <div className="rounded-xl border border-neutral-100 bg-white shadow-soft overflow-hidden">
-                {billingHistory.map((item, i) => (
-                  <div
-                    key={item.id}
-                    className={cn(
-                      "flex items-center justify-between px-4 py-3",
-                      i !== billingHistory.length - 1 && "border-b border-neutral-50"
-                    )}
-                  >
-                    <div>
-                      <p className="text-[13px] text-neutral-900">{item.description}</p>
-                      <p className="text-[11px] text-neutral-400">{formatDate(item.date)}</p>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <p className="text-[13px] font-medium text-neutral-700">{formatCurrency(item.amount)}</p>
-                      <span className={cn(
-                        "text-[11px] font-medium",
-                        item.status === "paid" ? "text-emerald-500" : 
-                        item.status === "pending" ? "text-amber-500" : "text-red-500"
-                      )}>
-                        {item.status}
-                      </span>
-                      {item.invoiceUrl && (
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
-                          <Download className="h-3.5 w-3.5 text-neutral-400" strokeWidth={1.5} />
-                        </Button>
-                      )}
-                    </div>
+            <TabsContent value="usage">
+              <div className="rounded-xl border border-neutral-100 bg-white p-6 shadow-soft">
+                <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-400 mb-4">
+                  Current month
+                </p>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[13px] text-neutral-600">Total monthly spend</span>
+                    <span className="text-[13px] font-medium text-neutral-900">
+                      {formatCurrency(stats.totalMonthlySpent)}
+                    </span>
                   </div>
-                ))}
+                  <div className="flex items-center justify-between">
+                    <span className="text-[13px] text-neutral-600">Total vault balance</span>
+                    <span className="text-[13px] font-medium text-neutral-900">
+                      {formatCurrency(stats.totalBalance)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[13px] text-neutral-600">Active agents</span>
+                    <span className="text-[13px] font-medium text-neutral-900">
+                      {stats.activeAgents}
+                    </span>
+                  </div>
+                </div>
               </div>
             </TabsContent>
 
-            <TabsContent value="workspaces">
+            <TabsContent value="projects">
               <div className="rounded-xl border border-neutral-100 bg-white shadow-soft overflow-hidden">
-                {workspaces.map((workspace, i) => (
-                  <div
-                    key={workspace.id}
-                    className={cn(
-                      "flex items-center justify-between px-4 py-3",
-                      i !== workspaces.length - 1 && "border-b border-neutral-50"
-                    )}
-                  >
-                    <div>
-                      <p className="text-[13px] text-neutral-900">{workspace.name}</p>
-                      <p className="text-[11px] text-neutral-400">
-                        {workspace.projectCount} projects, {workspace.botCount} bots
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-[13px] font-medium text-neutral-700">
-                        {formatCurrency(workspace.budget.spent)}
-                      </p>
-                      <p className="text-[11px] text-neutral-400">
-                        of {formatCurrency(workspace.budget.allocated)}
-                      </p>
-                    </div>
+                {projects.length === 0 ? (
+                  <div className="p-6 text-center text-[13px] text-neutral-500">
+                    No projects yet
                   </div>
-                ))}
+                ) : (
+                  projects.map((project, i) => (
+                    <div
+                      key={project.id}
+                      className={cn(
+                        "flex items-center justify-between px-4 py-3",
+                        i !== projects.length - 1 && "border-b border-neutral-50"
+                      )}
+                    >
+                      <div>
+                        <p className="text-[13px] text-neutral-900">{project.name}</p>
+                        <p className="text-[11px] text-neutral-400">
+                          {project.agentCount} agents
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[13px] font-medium text-neutral-700">
+                          {formatCurrency(project.monthlySpent)}
+                        </p>
+                        <p className="text-[11px] text-neutral-400">this month</p>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </TabsContent>
           </Tabs>
