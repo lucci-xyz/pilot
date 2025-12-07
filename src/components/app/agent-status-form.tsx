@@ -4,7 +4,8 @@ import { ReactNode, ComponentProps } from "react";
 import { useFormStatus } from "react-dom";
 import { Button } from "@/components/ui/button";
 
-type ButtonVariant = ComponentProps<typeof Button>["variant"];
+type ButtonProps = ComponentProps<typeof Button>;
+type ButtonVariant = ButtonProps["variant"];
 
 interface SubmitButtonProps extends ButtonProps {
   children: ReactNode;

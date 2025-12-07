@@ -191,8 +191,8 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
                       </div>
                       <div className="mt-3 grid grid-cols-2 gap-3 text-[12px]">
                         <div>
-                          <p className="text-neutral-400">Model</p>
-                          <p className="text-neutral-700">{agent.model ?? "Not set"}</p>
+                          <p className="text-neutral-400">Provider</p>
+                          <p className="text-neutral-700">{agent.provider ?? "Not set"}</p>
                         </div>
                         <div>
                           <p className="text-neutral-400">Daily spent</p>

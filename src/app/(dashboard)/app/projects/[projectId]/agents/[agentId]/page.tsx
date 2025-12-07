@@ -112,7 +112,7 @@ export default async function AgentPage({ params }: AgentPageProps) {
                   <h1 className="text-lg font-medium text-neutral-900">{agent.name}</h1>
                   <StatusBadge status={agent.status as "active" | "paused" | "error" | "needs_setup"} />
                 </div>
-                <p className="text-[12px] text-neutral-500">{agent.model ?? "No model set"}</p>
+                <p className="text-[12px] text-neutral-500">{agent.provider ?? "No provider set"}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -138,7 +138,6 @@ export default async function AgentPage({ params }: AgentPageProps) {
                 defaultValues={{
                   name: agent.name,
                   provider: agent.provider,
-                  model: agent.model,
                 }}
               />
             </div>

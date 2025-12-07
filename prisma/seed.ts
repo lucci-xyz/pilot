@@ -267,8 +267,8 @@ async function main() {
         status: "confirmed",
         metadata: JSON.stringify({
           tokens: Math.floor(Math.random() * 10000) + 100,
-          model: agent.model,
           provider: agent.provider,
+          agentName: agent.name,
         }),
         vaultId: project.vault!.id,
         agentId: agent.id,

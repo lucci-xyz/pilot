@@ -69,7 +69,6 @@ export async function updateAgentDetailsAction(
 
   const name = (formData.get("name") as string | null)?.trim();
   const provider = (formData.get("provider") as string | null)?.trim() || null;
-  const model = (formData.get("model") as string | null)?.trim() || null;
 
   if (!name) {
     return { error: "Name is required" };
@@ -80,7 +79,6 @@ export async function updateAgentDetailsAction(
     data: {
       name,
       provider,
-      model,
     },
   });
 
