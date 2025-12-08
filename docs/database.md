@@ -13,6 +13,8 @@ users
         ├── vaults (1:1)        # agent wallet
         │   └── events (1:many)
         └── agent_budget_rules (1:1)
+        └── agent_budgets (1:1)
+        └── agent_transactions (1:many)
 ```
 
 ## Models
@@ -85,6 +87,8 @@ users
 | webhookUrl | string? | Callback URL |
 | projectId | string | FK → projects |
 | wallet | 1:1 → vaults |
+| budget | 1:1 → agent_budgets |
+| transactions | 1:many → agent_transactions |
 | createdAt | datetime | |
 | updatedAt | datetime | |
 
@@ -103,6 +107,31 @@ users
 | updatedAt | datetime | |
 | agentId | string | FK → agents (unique) |
 
+### `agent_budgets`
+| Column | Type | Notes |
+|--------|------|-------|
+| id | cuid | PK |
+| monthlyBudgetUsd | decimal(18,6) | Monthly USD budget |
+| active | boolean | Defaults to true |
+| createdAt | datetime | |
+| updatedAt | datetime | |
+| agentId | string | FK → agents (unique) |
+| projectId | string | FK → projects |
+
+### `agent_transactions`
+| Column | Type | Notes |
+|--------|------|-------|
+| id | cuid | PK |
+| amountUsd | decimal(18,6) | Transaction amount in USD |
+| token | string | Defaults to `USDC` |
+| txSignature | string? | Solana tx signature or external reference |
+| description | string? | Optional description |
+| status | string | `pending` / `confirmed` / `failed` (default `confirmed`) |
+| createdAt | datetime | |
+| updatedAt | datetime | |
+| agentId | string | FK → agents |
+| projectId | string | FK → projects |
+
 ### `events`
 | Column | Type | Notes |
 |--------|------|-------|
@@ -118,10 +147,11 @@ users
 
 ## Notes
 
-- All amounts in **minor units** (USDC = 6 decimals, so $1.00 = 1000000)
+- Wallet balances and event amounts use **minor units** (USDC = 6 decimals, so $1.00 = 1000000)
+- Budget/transaction amounts are stored as `decimal(18,6)` USD values
 - Vault private keys are encrypted with `VAULT_ENCRYPTION_KEY` before storage
-- Cascade deletes: User → Projects → Agents → Wallets → Events
-- Indexed: `events(vaultId, createdAt)`, `events(agentId, createdAt)`, `events(type, createdAt)`
+- Cascade deletes: User → Projects → Agents → Wallets/Events/BudgetRules/Budgets/Transactions
+- Indexed: `events(vaultId, createdAt)`, `events(agentId, createdAt)`, `events(type, createdAt)`, `agent_budgets(projectId)`, `agent_transactions(agentId, createdAt)`, `agent_transactions(projectId, createdAt)`
 
 ## Database Commands
 
