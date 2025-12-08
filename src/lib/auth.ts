@@ -71,8 +71,7 @@ export async function getSession(): Promise<{ user: User } | null> {
   });
 
   if (!session || session.expiresAt < new Date()) {
-    // Session expired or not found, clear the cookie
-    cookieStore.delete(SESSION_COOKIE_NAME);
+    // Session expired or not found; let server actions handle cookie cleanup
     if (session) {
       await prisma.session.delete({ where: { id: session.id } });
     }

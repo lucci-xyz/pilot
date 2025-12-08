@@ -18,7 +18,7 @@ export type UseFundWalletReturn = {
 };
 
 /**
- * Hook to transfer SOL from connected wallet to a project wallet address.
+ * Hook to transfer SOL from connected wallet to an agent wallet address.
  * Uses @solana/wallet-adapter for wallet connection and transaction signing.
  */
 export function useFundWallet(): UseFundWalletReturn {

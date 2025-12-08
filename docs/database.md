@@ -9,11 +9,10 @@ users
 ├── sessions (1:many)
 ├── api_keys (1:many)
 └── projects (1:many)
-    └── vaults (1:1)
-        └── events (1:many)
     └── agents (1:many)
-        ├── agent_budget_rules (1:1)
-        └── events (1:many)
+        ├── vaults (1:1)        # agent wallet
+        │   └── events (1:many)
+        └── agent_budget_rules (1:1)
 ```
 
 ## Models
@@ -71,7 +70,7 @@ users
 | address | string | Solana USDC address (unique) |
 | encryptedPrivateKey | string | AES-256-GCM encrypted Solana private key |
 | balance | bigint | Minor units (6 decimals) |
-| projectId | string | FK → projects |
+| agentId | string | FK → agents |
 | createdAt | datetime | |
 | updatedAt | datetime | |
 
@@ -85,6 +84,7 @@ users
 | apiKeyHash | string? | For agent auth |
 | webhookUrl | string? | Callback URL |
 | projectId | string | FK → projects |
+| wallet | 1:1 → vaults |
 | createdAt | datetime | |
 | updatedAt | datetime | |
 
@@ -112,15 +112,15 @@ users
 | status | string | `pending` / `confirmed` / `failed` |
 | txHash | string? | Solana tx signature |
 | metadata | string? | JSON (tokens, model, etc.) |
-| vaultId | string | FK → vaults |
-| agentId | string? | FK → agents (nullable) |
+| vaultId | string | FK → vaults (agent wallet) |
+| agentId | string | FK → agents |
 | createdAt | datetime | |
 
 ## Notes
 
 - All amounts in **minor units** (USDC = 6 decimals, so $1.00 = 1000000)
 - Vault private keys are encrypted with `VAULT_ENCRYPTION_KEY` before storage
-- Cascade deletes: User → Projects → Vault → Events; User → Projects → Agents → Events
+- Cascade deletes: User → Projects → Agents → Wallets → Events
 - Indexed: `events(vaultId, createdAt)`, `events(agentId, createdAt)`, `events(type, createdAt)`
 
 ## Database Commands

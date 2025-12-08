@@ -19,15 +19,15 @@ import { useWalletBalance } from "@/hooks/use-wallet-balance";
 import { WalletSelectDialog } from "./wallet-select-dialog";
 
 type FundWalletDialogProps = {
-  projectWalletAddress: string;
-  projectName: string;
+  walletAddress: string;
+  walletOwnerName: string;
   onSuccess?: () => void;
   children?: React.ReactNode;
 };
 
 export function FundWalletDialog({
-  projectWalletAddress,
-  projectName,
+  walletAddress,
+  walletOwnerName,
   onSuccess,
   children,
 }: FundWalletDialogProps) {
@@ -53,7 +53,7 @@ export function FundWalletDialog({
     const amountNum = parseFloat(amount);
     if (isNaN(amountNum) || amountNum <= 0) return;
 
-    const signature = await fundWallet(projectWalletAddress, amountNum);
+    const signature = await fundWallet(walletAddress, amountNum);
     if (signature) {
       refetchBalance();
       onSuccess?.();
@@ -83,9 +83,9 @@ export function FundWalletDialog({
         </DialogTrigger>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-[15px]">Fund project wallet</DialogTitle>
+            <DialogTitle className="text-[15px]">Fund wallet</DialogTitle>
             <DialogDescription className="text-[13px]">
-              Transfer SOL from your wallet to {projectName}&apos;s devnet vault.
+              Transfer SOL from your wallet to {walletOwnerName}&apos;s devnet wallet.
             </DialogDescription>
           </DialogHeader>
 
@@ -100,7 +100,7 @@ export function FundWalletDialog({
                       Transaction successful!
                     </p>
                     <p className="mt-1 text-[12px] text-emerald-700">
-                      {amount} SOL has been sent to the project wallet.
+                      {amount} SOL has been sent to the wallet.
                     </p>
                     <a
                       href={`https://explorer.solana.com/tx/${state.txSignature}?cluster=devnet`}
@@ -122,7 +122,7 @@ export function FundWalletDialog({
                 <div className="flex items-start gap-3">
                   <AlertCircle className="mt-0.5 h-4 w-4 text-red-600" />
                   <div>
-                    <p className="text-[13px] font-medium text-red-800">
+                  <p className="text-[13px] font-medium text-red-800">
                       Transaction failed
                     </p>
                     <p className="mt-1 text-[12px] text-red-700">{state.error}</p>
@@ -135,7 +135,7 @@ export function FundWalletDialog({
             {!connected ? (
               <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4">
                 <p className="text-[13px] text-neutral-600">
-                  Connect your Solana wallet to fund this project.
+                  Connect your Solana wallet to fund this address.
                 </p>
                 <Button
                   onClick={handleConnect}
@@ -221,7 +221,7 @@ export function FundWalletDialog({
                     Destination
                   </p>
                   <p className="mt-0.5 font-mono text-[11px] text-neutral-600 break-all">
-                    {projectWalletAddress}
+                    {walletAddress}
                   </p>
                 </div>
 

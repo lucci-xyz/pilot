@@ -39,12 +39,12 @@ export function BotSetupSection({ botId, webhookUrl, webhookAction }: BotSetupSe
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-400 mb-3">
-          Integration
-        </p>
-        <CodeTabs tabs={setupCode} />
+    <div className="space-y-5">
+      <div className="space-y-2">
+        <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-400">Integration</p>
+        <div className="overflow-x-auto max-w-full text-[12px] [&_pre]:text-[12px] [&_pre]:leading-relaxed [&_pre]:whitespace-pre-wrap [&_code]:text-[12px] max-h-[360px]">
+          <CodeTabs tabs={setupCode} />
+        </div>
       </div>
 
       <div className="rounded-xl border border-neutral-100 bg-white p-5 shadow-soft">

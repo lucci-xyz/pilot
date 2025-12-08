@@ -3,13 +3,11 @@ import Link from "next/link";
 import { ChevronRight, Plus, ArrowLeft } from "lucide-react";
 import { AppHeader } from "@/components/app/app-header";
 import { StatsCard } from "@/components/app/stats-card";
-import { VaultCard } from "@/components/app/vault-card";
-import { VaultAddress } from "@/components/app/vault-address";
 import { SpendChart } from "@/components/app/spend-chart";
+import type { ChartDataPoint } from "@/components/app/spend-chart";
 import { ComparisonChart } from "@/components/app/comparison-chart";
 import { StatusBadge } from "@/components/app/status-badge";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { requireAuth } from "@/lib/auth";
 import { getProject } from "@/lib/data/projects";
 import { getProjectAgents } from "@/lib/data/agents";
@@ -32,6 +30,51 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
   const activities = await getProjectActivity(projectId, user.id);
   const { dailyData, weeklyData, monthlyData } = await getUserSpendChartData(user.id, 30);
 
+  // Build per-agent daily series (last 14 days) from events loaded with project
+  const days = 14;
+  const dateBuckets: { date: string; label: string }[] = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const label = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    dateBuckets.push({ date: d.toISOString().split("T")[0], label });
+  }
+
+  const agentSeries = agents.map((agent) => ({
+    key: agent.id,
+    label: agent.name,
+  }));
+
+  const colorPalette = ["#d97757", "#2563eb", "#16a34a", "#9333ea", "#f97316", "#0ea5e9"];
+  const agentColors = Object.fromEntries(
+    agentSeries.map((s, idx) => [s.key, colorPalette[idx % colorPalette.length]])
+  );
+  const agentNameColors = Object.fromEntries(
+    agents.map((a, idx) => [a.name, colorPalette[idx % colorPalette.length]])
+  );
+
+  const dailySeriesData: ChartDataPoint[] = dateBuckets.map((bucket) => {
+    const entry: ChartDataPoint = {
+      date: bucket.date,
+      label: bucket.label,
+      value: 0,
+    };
+
+    agentSeries.forEach((s) => {
+      const agent = project.agents.find((a) => a.id === s.key);
+      const spendForDay =
+        agent?.events
+          .filter((e) => e.type === "spend" && e.status === "confirmed")
+          .filter((e) => e.createdAt.toISOString().split("T")[0] === bucket.date)
+          .reduce((sum, e) => sum + Math.abs(Number(e.amount)) / 1_000_000, 0) ?? 0;
+
+      entry[s.key] = spendForDay;
+      entry.value += spendForDay;
+    });
+
+    return entry;
+  });
+
   const formatCurrency = (amount: number | bigint) => {
     const value = typeof amount === "bigint" ? Number(amount) / 1_000_000 : amount;
     return new Intl.NumberFormat("en-US", {
@@ -46,31 +89,15 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
     0
   );
 
+  const totalWalletBalance = agents.reduce(
+    (sum, agent) => sum + Number(agent.walletBalance),
+    0
+  );
+
   const agentComparisonData = agents.map((agent) => ({
     name: agent.name,
     spend: Number(agent.monthlySpent) / 1_000_000,
   }));
-
-  // Vault and budget data for display
-  const vaultData = {
-    id: project.vault?.id ?? "",
-    name: `${project.name} Vault`,
-    balance: Number(project.vault?.balance ?? 0) / 1_000_000,
-    limit: 100000,
-    currency: "USD",
-    lastFourDigits: project.vault?.address?.slice(-4) ?? "0000",
-    expiryDate: "N/A",
-    type: "virtual" as const,
-  };
-
-  const budgetData = {
-    id: project.id,
-    name: `${project.name} Budget`,
-    allocated: 100000,
-    spent: totalMonthlySpent / 1_000_000,
-    currency: "USD",
-    period: "monthly" as const,
-  };
 
   return (
     <>
@@ -96,70 +123,17 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
               value={formatCurrency(totalMonthlySpent)}
             />
             <StatsCard 
-              title="Vault balance" 
-              value={formatCurrency(project.vault?.balance ?? BigInt(0))}
+              title="Wallet balance" 
+              value={formatCurrency(totalWalletBalance)}
             />
             <StatsCard title="Status" value={project.status} />
           </div>
 
-          <Tabs defaultValue="budget" className="space-y-6">
-            <TabsList className="h-9 bg-neutral-100/50 p-1">
-              <TabsTrigger value="budget" className="text-[12px]">Budget</TabsTrigger>
-              <TabsTrigger value="analytics" className="text-[12px]">Analytics</TabsTrigger>
-              <TabsTrigger value="agents" className="text-[12px]">Agents</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="analytics" className="space-y-6">
-              <div className="grid gap-6 lg:grid-cols-2">
-                <SpendChart dailyData={dailyData} weeklyData={weeklyData} monthlyData={monthlyData} />
-                <ComparisonChart data={agentComparisonData} title="By agent" />
-              </div>
-            </TabsContent>
-
-            <TabsContent value="budget" className="space-y-6">
-              <div className="grid gap-6 lg:grid-cols-2">
-                <div className="space-y-3">
-                  <VaultCard vault={vaultData} budget={budgetData} />
-                  <VaultAddress address={project.vault?.address} projectName={project.name} />
-                </div>
-                <div className="rounded-xl border border-neutral-100 bg-white p-5 shadow-soft">
-                  <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-400">
-                    Recent Activity
-                  </p>
-                  <div className="mt-4 space-y-2">
-                    {activities.length === 0 ? (
-                      <p className="text-[13px] text-neutral-500">No recent activity</p>
-                    ) : (
-                      activities.slice(0, 5).map((activity) => (
-                        <div
-                          key={activity.id}
-                          className="flex items-center justify-between py-2 text-[12px]"
-                        >
-                          <div>
-                            <p className="text-neutral-700">
-                              {activity.type === "funding" ? "Funded" : "Spent"} by{" "}
-                              {activity.agentName ?? "Unknown"}
-                            </p>
-                            <p className="text-neutral-400">
-                              {activity.createdAt.toLocaleDateString()}
-                            </p>
-                          </div>
-                          <p className={activity.type === "funding" ? "text-emerald-600" : "text-neutral-700"}>
-                            {activity.type === "funding" ? "+" : "-"}
-                            {formatCurrency(BigInt(Math.abs(Number(activity.amount))))}
-                          </p>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="agents" className="space-y-4">
+          <div className="space-y-6">
+            <div className="rounded-xl border border-neutral-100 bg-white p-5 shadow-soft">
               <div className="flex items-center justify-between">
                 <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-400">
-                  {agents.length} agents
+                  Agent wallets
                 </p>
                 <Link href={`/app/projects/${projectId}/agents/new`}>
                   <Button size="sm" className="h-8 bg-neutral-900 text-[12px] hover:bg-neutral-800">
@@ -168,43 +142,76 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
                   </Button>
                 </Link>
               </div>
-              {agents.length === 0 ? (
-                <div className="rounded-xl border border-neutral-100 bg-white p-8 text-center shadow-soft">
-                  <p className="text-[13px] text-neutral-500">
-                    No agents yet. Create one to get started!
-                  </p>
-                </div>
-              ) : (
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {agents.map((agent) => (
-                    <Link
-                      key={agent.id}
-                      href={`/app/projects/${projectId}/agents/${agent.id}`}
-                      className="group rounded-xl border border-neutral-100 bg-white p-4 shadow-soft transition-shadow hover:shadow-soft-md"
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {agents.length === 0 ? (
+                  <p className="text-[13px] text-neutral-500">No agents yet. Create one to provision a wallet.</p>
+                ) : (
+                  agents.map((agent) => (
+                    <div key={agent.id} className="rounded-lg border border-neutral-100 p-4">
+                      <div className="flex items-center justify-between">
+                        <p className="text-[13px] font-medium text-neutral-900">{agent.name}</p>
+                        <StatusBadge status={agent.status as "active" | "paused" | "error" | "needs_setup"} />
+                      </div>
+                      <p className="mt-1 text-[12px] text-neutral-500">{agent.provider ?? "No provider"}</p>
+                      <p className="mt-2 text-[20px] font-semibold text-neutral-900">
+                        {formatCurrency(agent.walletBalance)}
+                      </p>
+                      <Link
+                        href={`/app/projects/${projectId}/agents/${agent.id}`}
+                        className="mt-2 inline-flex text-[12px] text-primary hover:underline"
+                      >
+                        Manage →
+                      </Link>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="grid gap-6 lg:grid-cols-2">
+              <SpendChart
+                dailyData={dailySeriesData}
+                weeklyData={dailySeriesData}
+                monthlyData={dailySeriesData}
+                series={agentSeries}
+                stacked={true}
+                colors={agentColors}
+              />
+              <ComparisonChart data={agentComparisonData} title="By agent" colors={agentNameColors} />
+            </div>
+
+            <div className="rounded-xl border border-neutral-100 bg-white p-5 shadow-soft">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-400">
+                Recent Activity
+              </p>
+              <div className="mt-4 space-y-2">
+                {activities.length === 0 ? (
+                  <p className="text-[13px] text-neutral-500">No recent activity</p>
+                ) : (
+                  activities.slice(0, 5).map((activity) => (
+                    <div
+                      key={activity.id}
+                      className="flex items-center justify-between py-2 text-[12px]"
                     >
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-2">
-                          <p className="text-[13px] font-medium text-neutral-900">{agent.name}</p>
-                          <StatusBadge status={agent.status as "active" | "paused" | "error" | "needs_setup"} />
-                        </div>
-                        <ChevronRight className="h-4 w-4 text-neutral-300 transition-colors group-hover:text-neutral-500" strokeWidth={1.5} />
+                      <div>
+                        <p className="text-neutral-700">
+                          {activity.type === "funding" ? "Funded" : "Spent"} by{" "}
+                          {activity.agentName ?? "Unknown"}
+                        </p>
+                        <p className="text-neutral-400">
+                          {activity.createdAt.toLocaleDateString()}
+                        </p>
                       </div>
-                      <div className="mt-3 grid grid-cols-2 gap-3 text-[12px]">
-                        <div>
-                          <p className="text-neutral-400">Provider</p>
-                          <p className="text-neutral-700">{agent.provider ?? "Not set"}</p>
-                        </div>
-                        <div>
-                          <p className="text-neutral-400">Daily spent</p>
-                          <p className="text-neutral-700">{formatCurrency(agent.dailySpent)}</p>
-                        </div>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </TabsContent>
-          </Tabs>
+                      <p className={activity.type === "funding" ? "text-emerald-600" : "text-neutral-700"}>
+                        {activity.type === "funding" ? "+" : "-"}
+                        {formatCurrency(BigInt(Math.abs(Number(activity.amount))))}
+                      </p>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       </main>
     </>

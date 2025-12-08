@@ -4,10 +4,9 @@ import { ArrowLeft, Pause, Play } from "lucide-react";
 import { AppHeader } from "@/components/app/app-header";
 import { StatsCard } from "@/components/app/stats-card";
 import { VaultCard } from "@/components/app/vault-card";
+import { VaultAddress } from "@/components/app/vault-address";
 import { StatusBadge } from "@/components/app/status-badge";
 import { BotSetupSection } from "@/components/app/bot-setup-section";
-import { PerformanceChart } from "@/components/app/performance-chart";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { requireAuth } from "@/lib/auth";
 import { getProject } from "@/lib/data/projects";
 import { getAgent, getAgentPerformance } from "@/lib/data/agents";
@@ -40,8 +39,6 @@ export default async function AgentPage({ params }: AgentPageProps) {
     notFound();
   }
 
-  const performanceData = await getAgentPerformance(agentId, user.id, 14);
-
   const formatCurrency = (amount: number | bigint) => {
     const value = typeof amount === "bigint" ? Number(amount) / 1_000_000 : amount;
     return new Intl.NumberFormat("en-US", {
@@ -63,13 +60,15 @@ export default async function AgentPage({ params }: AgentPageProps) {
   }).length;
 
   // Vault and budget data for display
+  const walletBalance = Number(agent.wallet?.balance ?? BigInt(0)) / 1_000_000;
+
   const vaultData = {
-    id: agent.id,
-    name: `${agent.name} Budget`,
-    balance: Number(agent.budgetRule?.dailyLimit ?? 0) / 1_000_000,
-    limit: Number(agent.budgetRule?.dailyLimit ?? 0) / 1_000_000,
+    id: agent.wallet?.id ?? agent.id,
+    name: `${agent.name} Wallet`,
+    balance: walletBalance,
+    limit: walletBalance,
     currency: "USD",
-    lastFourDigits: agent.id.slice(-4),
+    lastFourDigits: agent.wallet?.address.slice(-4) ?? agent.id.slice(-4),
     expiryDate: "N/A",
     type: "virtual" as const,
   };
@@ -86,19 +85,11 @@ export default async function AgentPage({ params }: AgentPageProps) {
   const toDollars = (value: bigint | number | null | undefined) =>
     Number(value ?? 0) / 1_000_000;
 
-  // Transform performance data for chart
-  const chartData = performanceData.map((d) => ({
-    date: d.date,
-    requests: d.requests,
-    errors: 0,
-    latency: 150,
-  }));
-
   return (
     <>
       <AppHeader title={agent.name} />
       <main className="flex-1 overflow-auto bg-neutral-50/50">
-        <div className="mx-auto max-w-6xl space-y-6 p-6">
+        <div className="mx-auto max-w-7xl space-y-5 p-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <Link
@@ -143,101 +134,108 @@ export default async function AgentPage({ params }: AgentPageProps) {
             </div>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <StatsCard title="Requests today" value={todayRequests.toLocaleString()} />
-            <StatsCard 
-              title="Daily spent" 
-              value={formatCurrency(agent.budgetRule?.dailySpent ?? BigInt(0))}
-              subtitle={`of ${formatCurrency(agent.budgetRule?.dailyLimit ?? BigInt(0))}`}
-            />
-            <StatsCard title="Total spent" value={formatCurrency(totalSpent)} />
-            <StatsCard title="Total requests" value={totalRequests.toLocaleString()} />
+          <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
+            <div className="space-y-3">
+              <VaultCard vault={vaultData} budget={budgetData} />
+              <VaultAddress address={agent.wallet?.address} walletName={agent.name} />
+            </div>
+            <div className="rounded-xl border border-neutral-100 bg-white p-5 shadow-soft">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-400">
+                Recent Transactions
+              </p>
+              <div className="mt-4 space-y-2">
+                {agent.events.length === 0 ? (
+                  <p className="text-[13px] text-neutral-500">No transactions yet.</p>
+                ) : (
+                  agent.events.slice(0, 6).map((e) => (
+                    <div key={e.id} className="flex items-center justify-between text-[12px]">
+                      <div className="flex flex-col">
+                        <span className="text-neutral-700 capitalize">{e.type}</span>
+                        <span className="text-neutral-400">{e.createdAt.toLocaleDateString()}</span>
+                      </div>
+                      <span className={e.type === "funding" ? "text-emerald-600" : "text-neutral-700"}>
+                        {e.type === "funding" ? "+" : "-"}
+                        {formatCurrency(BigInt(Math.abs(Number(e.amount))))}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
           </div>
 
-          <Tabs defaultValue="overview" className="space-y-6">
-            <TabsList className="h-9 bg-neutral-100/50 p-1">
-              <TabsTrigger value="overview" className="text-[12px]">Overview</TabsTrigger>
-              <TabsTrigger value="setup" className="text-[12px]">Setup</TabsTrigger>
-              <TabsTrigger value="budget" className="text-[12px]">Budget</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="overview" className="space-y-6">
-              <div className="grid gap-6 lg:grid-cols-2">
-                <PerformanceChart data={chartData} />
-                <div className="rounded-xl border border-neutral-100 bg-white p-5 shadow-soft">
-                  <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-400">
-                    Details
-                  </p>
-                  <div className="mt-4 space-y-3">
-                    {[
-                      { label: "Status", value: <StatusBadge status={agent.status as "active" | "paused" | "error" | "needs_setup"} /> },
-                      { label: "Provider", value: agent.provider ?? "Not set" },
-                      { label: "Created", value: agent.createdAt.toLocaleDateString() },
-                      { label: "Project", value: <Link href={`/app/projects/${projectId}`} className="text-primary hover:underline">{project.name}</Link> },
-                    ].map((item, i) => (
-                      <div key={i} className="flex items-center justify-between">
-                        <span className="text-[12px] text-neutral-500">{item.label}</span>
-                        <span className="text-[12px] text-neutral-700">{item.value}</span>
-                      </div>
-                    ))}
-                  </div>
+          <div className="grid gap-4 lg:grid-cols-[0.85fr_1.15fr] items-start">
+            <div className="space-y-4">
+              <div className="rounded-xl border border-neutral-100 bg-white p-5 shadow-soft">
+                <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-400">
+                  Details
+                </p>
+                <div className="mt-4 space-y-3">
+                  {[
+                    { label: "Status", value: <StatusBadge status={agent.status as "active" | "paused" | "error" | "needs_setup"} /> },
+                    { label: "Provider", value: agent.provider ?? "Not set" },
+                    { label: "Created", value: agent.createdAt.toLocaleDateString() },
+                    { label: "Project", value: <Link href={`/app/projects/${projectId}`} className="text-primary hover:underline">{project.name}</Link> },
+                  ].map((item, i) => (
+                    <div key={i} className="flex items-center justify-between">
+                      <span className="text-[12px] text-neutral-500">{item.label}</span>
+                      <span className="text-[12px] text-neutral-700">{item.value}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
-            </TabsContent>
 
-            <TabsContent value="setup" className="space-y-6">
-              <BotSetupSection
-                botId={agent.id}
-                webhookUrl={agent.webhookUrl ?? undefined}
-                webhookAction={updateAgentWebhookAction.bind(null, agent.id, projectId)}
-              />
-            </TabsContent>
-
-            <TabsContent value="budget" className="space-y-6">
-              <div className="grid gap-6 lg:grid-cols-2">
-                <VaultCard vault={vaultData} budget={budgetData} />
-                <div className="rounded-xl border border-neutral-100 bg-white p-5 shadow-soft">
-                  <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-400">
-                    Budget Limits
-                  </p>
-                  <div className="mt-4 space-y-3">
+              <div className="rounded-xl border border-neutral-100 bg-white p-5 shadow-soft">
+                <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-400">
+                  Budget & Limits
+                </p>
+                <div className="mt-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[12px] text-neutral-500">Daily limit</span>
+                    <span className="text-[12px] font-medium text-neutral-700">
+                      {formatCurrency(agent.budgetRule?.dailyLimit ?? BigInt(0))}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[12px] text-neutral-500">Per transaction</span>
+                    <span className="text-[12px] font-medium text-neutral-700">
+                      {formatCurrency(agent.budgetRule?.perTxLimit ?? BigInt(0))}
+                    </span>
+                  </div>
+                  {agent.budgetRule?.monthlyLimit && (
                     <div className="flex items-center justify-between">
-                      <span className="text-[12px] text-neutral-500">Daily limit</span>
+                      <span className="text-[12px] text-neutral-500">Monthly limit</span>
                       <span className="text-[12px] font-medium text-neutral-700">
-                        {formatCurrency(agent.budgetRule?.dailyLimit ?? BigInt(0))}
+                        {formatCurrency(agent.budgetRule.monthlyLimit)}
                       </span>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-[12px] text-neutral-500">Per transaction</span>
-                      <span className="text-[12px] font-medium text-neutral-700">
-                        {formatCurrency(agent.budgetRule?.perTxLimit ?? BigInt(0))}
-                      </span>
-                    </div>
-                    {agent.budgetRule?.monthlyLimit && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-[12px] text-neutral-500">Monthly limit</span>
-                        <span className="text-[12px] font-medium text-neutral-700">
-                          {formatCurrency(agent.budgetRule.monthlyLimit)}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="mt-6 flex gap-2">
-                    <AgentBudgetDialog
-                      action={updateAgentBudgetAction.bind(null, agent.id, projectId)}
-                      defaults={{
-                        dailyLimit: toDollars(agent.budgetRule?.dailyLimit ?? 0),
-                        perTxLimit: toDollars(agent.budgetRule?.perTxLimit ?? 0),
-                        monthlyLimit: agent.budgetRule?.monthlyLimit
-                          ? toDollars(agent.budgetRule?.monthlyLimit)
-                          : null,
-                      }}
-                    />
-                  </div>
+                  )}
+                </div>
+                <div className="mt-6 flex gap-2">
+                  <AgentBudgetDialog
+                    action={updateAgentBudgetAction.bind(null, agent.id, projectId)}
+                    defaults={{
+                      dailyLimit: toDollars(agent.budgetRule?.dailyLimit ?? 0),
+                      perTxLimit: toDollars(agent.budgetRule?.perTxLimit ?? 0),
+                      monthlyLimit: agent.budgetRule?.monthlyLimit
+                        ? toDollars(agent.budgetRule?.monthlyLimit)
+                        : null,
+                    }}
+                  />
                 </div>
               </div>
-            </TabsContent>
-          </Tabs>
+            </div>
+
+            <div className="rounded-xl border border-neutral-100 bg-white p-5 shadow-soft h-full">
+              <div className="mt-0 h-full w-full overflow-hidden">
+                <BotSetupSection
+                  botId={agent.id}
+                  webhookUrl={agent.webhookUrl ?? undefined}
+                  webhookAction={updateAgentWebhookAction.bind(null, agent.id, projectId)}
+                />
+              </div>
+            </div>
+          </div>
         </div>
       </main>
     </>

@@ -79,7 +79,6 @@ model Project {
   // Relations
   userId       String
   user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  vault        Vault?
   agents       Agent[]
   budgets      AgentBudget[]
   transactions AgentTransaction[]
@@ -96,8 +95,8 @@ model Vault {
   updatedAt     DateTime @updatedAt
 
   // Relations
-  projectId String  @unique
-  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  agentId String  @unique
+  agent   Agent   @relation(fields: [agentId], references: [id], onDelete: Cascade)
   events    Event[]
 
   @@map("vaults")
@@ -116,6 +115,7 @@ model Agent {
   // Relations
   projectId    String
   project      Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  wallet       Vault?
   budgetRule   AgentBudgetRule?
   events       Event[]
   budget       AgentBudget?
@@ -201,8 +201,8 @@ model Event {
   // Relations
   vaultId String
   vault   Vault  @relation(fields: [vaultId], references: [id], onDelete: Cascade)
-  agentId String?
-  agent   Agent?  @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  agentId String
+  agent   Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
 
   @@index([vaultId, createdAt])
   @@index([agentId, createdAt])

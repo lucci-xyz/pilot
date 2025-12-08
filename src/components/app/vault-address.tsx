@@ -9,14 +9,14 @@ import { cn } from "@/lib/utils";
 
 type VaultAddressProps = {
   address?: string | null;
-  projectName?: string;
+  walletName?: string;
   className?: string;
   cluster?: "devnet" | "mainnet-beta";
 };
 
 export function VaultAddress({
   address,
-  projectName = "Project",
+  walletName = "Wallet",
   className,
   cluster = "devnet",
 }: VaultAddressProps) {
@@ -51,7 +51,7 @@ export function VaultAddress({
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex-1">
             <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-400">
-              Vault address
+              Wallet address
             </p>
             <p className="mt-1 font-mono text-[12px] text-neutral-900 break-all">{address}</p>
             <p className="text-[12px] text-neutral-500">Solana • {clusterLabel}</p>
@@ -103,8 +103,8 @@ export function VaultAddress({
 
           {/* Fund wallet button - opens dialog */}
           <FundWalletDialog
-            projectWalletAddress={address}
-            projectName={projectName}
+            walletAddress={address}
+            walletOwnerName={walletName}
             onSuccess={handleFundSuccess}
           />
 

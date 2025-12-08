@@ -1,11 +1,10 @@
 import { prisma } from "@/lib/db";
-import { generateSolanaVaultKeypair } from "@/lib/solana";
 import { Project, Vault, Agent, AgentBudgetRule, Event } from "@/generated/prisma/client";
 import { randomAvatarKey, ProjectAvatarKey } from "@/lib/project-avatars";
 
 export type ProjectWithRelations = Project & {
-  vault: Vault | null;
   agents: (Agent & {
+    wallet: Vault | null;
     budgetRule: AgentBudgetRule | null;
     events: Event[];
   })[];
@@ -18,7 +17,7 @@ export type ProjectSummary = {
   status: string;
   avatar: ProjectAvatarKey | null;
   createdAt: Date;
-  vaultBalance: bigint;
+  totalWalletBalance: bigint;
   agentCount: number;
   activeAgentCount: number;
   totalSpent: bigint;
@@ -30,16 +29,13 @@ export async function getUserProjects(userId: string): Promise<ProjectSummary[]>
   const projects = await prisma.project.findMany({
     where: { userId },
     include: {
-      vault: {
-        include: {
-          events: {
-            where: { status: "confirmed" },
-          },
-        },
-      },
       agents: {
         include: {
+          wallet: true,
           budgetRule: true,
+          events: {
+            where: { status: "confirmed", type: "spend" },
+          },
         },
       },
     },
@@ -47,12 +43,23 @@ export async function getUserProjects(userId: string): Promise<ProjectSummary[]>
   });
 
   return projects.map((project) => {
-    const totalSpent = project.vault?.events
-      .filter((e) => e.type === "spend")
-      .reduce((sum, e) => sum + BigInt(Math.abs(Number(e.amount))), BigInt(0)) ?? BigInt(0);
+    const totalSpent = project.agents.reduce(
+      (sum, agent) =>
+        sum +
+        agent.events.reduce(
+          (acc, e) => acc + BigInt(Math.abs(Number(e.amount))),
+          BigInt(0)
+        ),
+      BigInt(0)
+    );
     
     const monthlySpent = project.agents.reduce(
       (sum, agent) => sum + (agent.budgetRule?.monthlySpent ?? BigInt(0)),
+      BigInt(0)
+    );
+
+    const totalWalletBalance = project.agents.reduce(
+      (sum, agent) => sum + (agent.wallet?.balance ?? BigInt(0)),
       BigInt(0)
     );
 
@@ -63,7 +70,7 @@ export async function getUserProjects(userId: string): Promise<ProjectSummary[]>
       status: project.status,
       avatar: (project as Project & { avatar?: ProjectAvatarKey | null }).avatar ?? null,
       createdAt: project.createdAt,
-      vaultBalance: project.vault?.balance ?? BigInt(0),
+      totalWalletBalance,
       agentCount: project.agents.length,
       activeAgentCount: project.agents.filter((a) => a.status === "active").length,
       totalSpent,
@@ -77,9 +84,9 @@ export async function getProject(projectId: string, userId: string): Promise<Pro
   return prisma.project.findFirst({
     where: { id: projectId, userId },
     include: {
-      vault: true,
       agents: {
         include: {
+          wallet: true,
           budgetRule: true,
           events: {
             orderBy: { createdAt: "desc" },
@@ -97,9 +104,9 @@ export async function getUserProjectStats(userId: string) {
   const projects = await prisma.project.findMany({
     where: { userId },
     include: {
-      vault: true,
       agents: {
         include: {
+          wallet: true,
           budgetRule: true,
         },
       },
@@ -125,7 +132,7 @@ export async function getUserProjectStats(userId: string) {
     0
   );
   const totalBalance = projects.reduce(
-    (sum, p) => sum + (p.vault?.balance ?? BigInt(0)),
+    (sum, p) => sum + p.agents.reduce((s, a) => s + (a.wallet?.balance ?? BigInt(0)), BigInt(0)),
     BigInt(0)
   );
   const totalMonthlySpent = projects.reduce(
@@ -154,7 +161,6 @@ export async function createProject(
     description?: string;
   }
 ): Promise<Project> {
-  const { address, encryptedPrivateKey } = await generateSolanaVaultKeypair();
   const avatarKey = randomAvatarKey();
 
   return prisma.project.create({
@@ -163,16 +169,6 @@ export async function createProject(
       description: data.description,
       userId,
       avatar: avatarKey,
-      vault: {
-        create: {
-          address,
-          encryptedPrivateKey,
-          balance: BigInt(0),
-        },
-      },
-    },
-    include: {
-      vault: true,
     },
   });
 }

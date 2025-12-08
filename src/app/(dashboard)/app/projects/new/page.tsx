@@ -30,8 +30,7 @@ export default function NewProjectPage() {
           <div className="rounded-xl border border-neutral-100 bg-white p-6 shadow-soft">
             <h2 className="text-lg font-medium text-neutral-900">Create a new project</h2>
             <p className="mt-1 text-[13px] text-neutral-500">
-              Projects help you organize your AI agents and manage their budgets. Each project gets its own Solana
-              devnet USDC vault address automatically.
+              Projects help you organize your AI agents and manage their budgets.
             </p>
 
             <form action={formAction} className="mt-6 space-y-4">

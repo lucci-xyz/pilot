@@ -58,24 +58,14 @@ async function main() {
 
   // Create projects
   console.log("Creating projects...");
-  const vault1 = await generateSolanaVaultKeypair();
-  const vault2 = await generateSolanaVaultKeypair();
-  const vault3 = await generateSolanaVaultKeypair();
   const project1 = await prisma.project.create({
     data: {
       name: "Customer Support",
       description: "AI-powered customer support automation",
       status: "active",
       userId: user.id,
-      vault: {
-        create: {
-          address: vault1.address,
-          encryptedPrivateKey: vault1.encryptedPrivateKey,
-          balance: BigInt(50_000_000_000), // $50,000
-        },
-      },
     },
-    include: { vault: true },
+    include: {},
   });
 
   const project2 = await prisma.project.create({
@@ -84,15 +74,8 @@ async function main() {
       description: "Marketing content and copy generation",
       status: "active",
       userId: user.id,
-      vault: {
-        create: {
-          address: vault2.address,
-          encryptedPrivateKey: vault2.encryptedPrivateKey,
-          balance: BigInt(25_000_000_000), // $25,000
-        },
-      },
     },
-    include: { vault: true },
+    include: {},
   });
 
   const project3 = await prisma.project.create({
@@ -101,27 +84,28 @@ async function main() {
       description: "Automated data analysis and reporting",
       status: "active",
       userId: user.id,
-      vault: {
-        create: {
-          address: vault3.address,
-          encryptedPrivateKey: vault3.encryptedPrivateKey,
-          balance: BigInt(15_000_000_000), // $15,000
-        },
-      },
     },
-    include: { vault: true },
+    include: {},
   });
 
   console.log(`✓ Created ${3} projects`);
 
   // Create agents for project 1
   console.log("Creating agents...");
+  const agent1Wallet = await generateSolanaVaultKeypair();
   const agent1 = await prisma.agent.create({
     data: {
       name: "Ticket Classifier",
       provider: "openai",
       status: "active",
       projectId: project1.id,
+      wallet: {
+        create: {
+          address: agent1Wallet.address,
+          encryptedPrivateKey: agent1Wallet.encryptedPrivateKey,
+          balance: BigInt(50_000_000_000), // $50,000
+        },
+      },
       budgetRule: {
         create: {
           dailyLimit: BigInt(500_000_000), // $500/day
@@ -132,14 +116,23 @@ async function main() {
         },
       },
     },
+    include: { wallet: true },
   });
 
+  const agent2Wallet = await generateSolanaVaultKeypair();
   const agent2 = await prisma.agent.create({
     data: {
       name: "FAQ Responder",
       provider: "openai",
       status: "active",
       projectId: project1.id,
+      wallet: {
+        create: {
+          address: agent2Wallet.address,
+          encryptedPrivateKey: agent2Wallet.encryptedPrivateKey,
+          balance: BigInt(25_000_000_000), // $25,000
+        },
+      },
       budgetRule: {
         create: {
           dailyLimit: BigInt(300_000_000), // $300/day
@@ -150,14 +143,23 @@ async function main() {
         },
       },
     },
+    include: { wallet: true },
   });
 
-  await prisma.agent.create({
+  const agent3Wallet = await generateSolanaVaultKeypair();
+  const agent3 = await prisma.agent.create({
     data: {
       name: "Sentiment Analyzer",
       provider: "anthropic",
       status: "paused",
       projectId: project1.id,
+      wallet: {
+        create: {
+          address: agent3Wallet.address,
+          encryptedPrivateKey: agent3Wallet.encryptedPrivateKey,
+          balance: BigInt(10_000_000_000), // $10,000
+        },
+      },
       budgetRule: {
         create: {
           dailyLimit: BigInt(200_000_000),
@@ -167,15 +169,24 @@ async function main() {
         },
       },
     },
+    include: { wallet: true },
   });
 
   // Create agents for project 2
+  const agent4Wallet = await generateSolanaVaultKeypair();
   const agent4 = await prisma.agent.create({
     data: {
       name: "Blog Writer",
       provider: "openai",
       status: "active",
       projectId: project2.id,
+      wallet: {
+        create: {
+          address: agent4Wallet.address,
+          encryptedPrivateKey: agent4Wallet.encryptedPrivateKey,
+          balance: BigInt(15_000_000_000), // $15,000
+        },
+      },
       budgetRule: {
         create: {
           dailyLimit: BigInt(200_000_000),
@@ -186,14 +197,23 @@ async function main() {
         },
       },
     },
+    include: { wallet: true },
   });
 
+  const agent5Wallet = await generateSolanaVaultKeypair();
   const agent5 = await prisma.agent.create({
     data: {
       name: "Social Media Bot",
       provider: "openai",
       status: "active",
       projectId: project2.id,
+      wallet: {
+        create: {
+          address: agent5Wallet.address,
+          encryptedPrivateKey: agent5Wallet.encryptedPrivateKey,
+          balance: BigInt(12_000_000_000), // $12,000
+        },
+      },
       budgetRule: {
         create: {
           dailyLimit: BigInt(100_000_000),
@@ -203,15 +223,24 @@ async function main() {
         },
       },
     },
+    include: { wallet: true },
   });
 
   // Create agent for project 3
+  const agent6Wallet = await generateSolanaVaultKeypair();
   await prisma.agent.create({
     data: {
       name: "Report Generator",
       provider: "openai",
       status: "needs_setup",
       projectId: project3.id,
+      wallet: {
+        create: {
+          address: agent6Wallet.address,
+          encryptedPrivateKey: agent6Wallet.encryptedPrivateKey,
+          balance: BigInt(8_000_000_000), // $8,000
+        },
+      },
       budgetRule: {
         create: {
           dailyLimit: BigInt(300_000_000),
@@ -230,14 +259,15 @@ async function main() {
   console.log("Creating events...");
   const now = new Date();
 
-  // Funding events
+  // Funding events (per agent wallet)
   await prisma.event.create({
     data: {
       type: "funding",
       amount: BigInt(50_000_000_000),
       status: "confirmed",
       txHash: `0x${crypto.randomUUID().replace(/-/g, "")}`,
-      vaultId: project1.vault!.id,
+      vaultId: agent1.wallet!.id,
+      agentId: agent1.id,
       createdAt: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000), // 7 days ago
     },
   });
@@ -248,7 +278,8 @@ async function main() {
       amount: BigInt(25_000_000_000),
       status: "confirmed",
       txHash: `0x${crypto.randomUUID().replace(/-/g, "")}`,
-      vaultId: project2.vault!.id,
+      vaultId: agent4.wallet!.id,
+      agentId: agent4.id,
       createdAt: new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000),
     },
   });
@@ -257,7 +288,6 @@ async function main() {
   const agents = [agent1, agent2, agent4, agent5];
   for (let i = 0; i < 50; i++) {
     const agent = agents[i % agents.length];
-    const project = agent.projectId === project1.id ? project1 : project2;
     const daysAgo = Math.floor(Math.random() * 14);
     const amount = BigInt(Math.floor(Math.random() * 5_000_000) + 100_000); // $0.10 - $5.00
     
@@ -271,7 +301,7 @@ async function main() {
           provider: agent.provider,
           agentName: agent.name,
         }),
-        vaultId: project.vault!.id,
+        vaultId: agent.wallet!.id,
         agentId: agent.id,
         createdAt: new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000 - Math.random() * 24 * 60 * 60 * 1000),
       },

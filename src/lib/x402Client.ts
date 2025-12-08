@@ -128,7 +128,7 @@ function tokenAmountToUsd(amount: string, token: string): number {
  * 3. If 402 Payment Required:
  *    - Parse payment details from response
  *    - Check agent budget
- *    - Process payment using project's Solana wallet
+ *    - Process payment using agent's Solana wallet
  *    - Record transaction
  *    - Retry request with payment proof header
  * 
@@ -190,16 +190,16 @@ export async function callMeteredEndpointWithX402(args: X402CallArgs): Promise<X
   // Check agent budget (throws BudgetExceededError if exceeded)
   await assertAgentWithinBudget(agentId, amountUsd);
 
-  // Get the project's vault with encrypted private key
-  const vault = await prisma.vault.findUnique({
-    where: { projectId },
+  // Get the agent's vault with encrypted private key
+  const wallet = await prisma.vault.findUnique({
+    where: { agentId },
   });
 
-  if (!vault) {
+  if (!wallet) {
     throw new X402PaymentError(
-      "Project does not have a configured vault",
-      "NO_VAULT",
-      { projectId }
+      "Agent does not have a configured wallet",
+      "NO_WALLET",
+      { agentId }
     );
   }
 
@@ -207,7 +207,7 @@ export async function callMeteredEndpointWithX402(args: X402CallArgs): Promise<X
   let txSignature: string;
   try {
     txSignature = await processX402PaymentSolana(
-      vault.encryptedPrivateKey,
+      wallet.encryptedPrivateKey,
       paymentDetails
     );
   } catch (error) {

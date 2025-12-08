@@ -16,10 +16,6 @@ export async function createProjectAction(
   formData: FormData
 ): Promise<ActionState> {
   const user = await requireAuth();
-
-  if (!process.env.VAULT_ENCRYPTION_KEY) {
-    return { error: "VAULT_ENCRYPTION_KEY is not set. Add it to your .env and restart." };
-  }
   
   const name = formData.get("name") as string;
   const description = formData.get("description") as string | null;
@@ -42,6 +38,10 @@ export async function createAgentAction(
   formData: FormData
 ): Promise<ActionState> {
   const user = await requireAuth();
+
+  if (!process.env.VAULT_ENCRYPTION_KEY) {
+    return { error: "VAULT_ENCRYPTION_KEY is not set. Add it to your .env and restart." };
+  }
   
   const name = formData.get("name") as string;
   const provider = formData.get("provider") as string | null;
