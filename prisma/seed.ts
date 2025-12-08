@@ -23,7 +23,8 @@ const prisma = new PrismaClient({ adapter });
 async function hashPassword(password: string): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(password);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  // Type assertion needed due to @solana/web3.js Buffer polyfill conflict
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data.buffer as ArrayBuffer);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
@@ -57,9 +58,9 @@ async function main() {
 
   // Create projects
   console.log("Creating projects...");
-  const vault1 = generateSolanaVaultKeypair();
-  const vault2 = generateSolanaVaultKeypair();
-  const vault3 = generateSolanaVaultKeypair();
+  const vault1 = await generateSolanaVaultKeypair();
+  const vault2 = await generateSolanaVaultKeypair();
+  const vault3 = await generateSolanaVaultKeypair();
   const project1 = await prisma.project.create({
     data: {
       name: "Customer Support",

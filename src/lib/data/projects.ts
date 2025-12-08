@@ -154,7 +154,7 @@ export async function createProject(
     description?: string;
   }
 ): Promise<Project> {
-  const { address, encryptedPrivateKey } = generateSolanaVaultKeypair();
+  const { address, encryptedPrivateKey } = await generateSolanaVaultKeypair();
   const avatarKey = randomAvatarKey();
 
   return prisma.project.create({

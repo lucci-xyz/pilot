@@ -120,7 +120,7 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
               <div className="grid gap-6 lg:grid-cols-2">
                 <div className="space-y-3">
                   <VaultCard vault={vaultData} budget={budgetData} />
-                  <VaultAddress address={project.vault?.address} />
+                  <VaultAddress address={project.vault?.address} projectName={project.name} />
                 </div>
                 <div className="rounded-xl border border-neutral-100 bg-white p-5 shadow-soft">
                   <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-400">
