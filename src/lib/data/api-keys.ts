@@ -35,7 +35,8 @@ export async function getUserApiKeys(userId: string): Promise<ApiKeySummary[]> {
 async function hashApiKey(key: string): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(key);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  // Type assertion needed due to @solana/web3.js Buffer polyfill conflict
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data.buffer as ArrayBuffer);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }

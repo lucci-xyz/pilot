@@ -43,7 +43,7 @@ export default async function AppOverviewPage() {
   const formattedActivities = activities.map((activity) => ({
     id: activity.id,
     type: activity.type === "funding" ? "vault_funded" as const : "budget_updated" as const,
-    title: activity.type === "funding" ? "Vault funded" : "Agent spend",
+    title: activity.type === "funding" ? "Wallet funded" : "Agent spend",
     description: `${activity.agentName ?? "Unknown agent"} in ${activity.projectName}`,
     timestamp: activity.createdAt.toISOString(),
     user: {

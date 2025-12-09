@@ -73,7 +73,7 @@ export default function NewAgentPage({ params }: NewAgentPageProps) {
             <p className="mt-1 text-[13px] text-neutral-500">
               {step === "details"
                 ? "Define the agent details. You can optionally set a provider."
-                : "Set spend limits so the agent can use your project budget safely."}
+                : "Set spend limits so the agent can use its wallet safely."}
             </p>
 
             <form action={formAction} onSubmit={handleSubmit} className="mt-6 space-y-4">

@@ -17,19 +17,19 @@ export type ActivityItem = {
 export async function getUserActivity(userId: string, limit: number = 10): Promise<ActivityItem[]> {
   const events = await prisma.event.findMany({
     where: {
-      vault: {
+      agent: {
         project: {
           userId,
         },
       },
     },
     include: {
-      agent: true,
-      vault: {
+      agent: {
         include: {
           project: true,
         },
       },
+      vault: true,
     },
     orderBy: { createdAt: "desc" },
     take: limit,
@@ -44,7 +44,7 @@ export async function getUserActivity(userId: string, limit: number = 10): Promi
     metadata: event.metadata,
     createdAt: event.createdAt,
     agentName: event.agent?.name ?? null,
-    projectName: event.vault.project.name,
+    projectName: event.agent?.project.name ?? "Unknown project",
   }));
 }
 
@@ -54,22 +54,20 @@ export async function getProjectActivity(
   userId: string,
   limit: number = 20
 ): Promise<ActivityItem[]> {
-  const project = await prisma.project.findFirst({
-    where: { id: projectId, userId },
-    include: { vault: true },
-  });
-
-  if (!project?.vault) return [];
-
   const events = await prisma.event.findMany({
-    where: { vaultId: project.vault.id },
+    where: {
+      agent: {
+        projectId,
+        project: { userId },
+      },
+    },
     include: {
-      agent: true,
-      vault: {
+      agent: {
         include: {
           project: true,
         },
       },
+      vault: true,
     },
     orderBy: { createdAt: "desc" },
     take: limit,
@@ -84,23 +82,23 @@ export async function getProjectActivity(
     metadata: event.metadata,
     createdAt: event.createdAt,
     agentName: event.agent?.name ?? null,
-    projectName: event.vault.project.name,
+    projectName: event.agent?.project.name ?? "Unknown project",
   }));
 }
 
 // Create a funding event
 export async function createFundingEvent(
-  projectId: string,
+  agentId: string,
   userId: string,
   amount: bigint,
   txHash?: string
 ): Promise<Event | null> {
-  const project = await prisma.project.findFirst({
-    where: { id: projectId, userId },
-    include: { vault: true },
+  const agent = await prisma.agent.findFirst({
+    where: { id: agentId, project: { userId } },
+    include: { wallet: true, project: true },
   });
 
-  if (!project?.vault) return null;
+  if (!agent?.wallet) return null;
 
   // Create event and update vault balance
   const [event] = await prisma.$transaction([
@@ -110,11 +108,12 @@ export async function createFundingEvent(
         amount,
         status: txHash ? "confirmed" : "pending",
         txHash,
-        vaultId: project.vault.id,
+        vaultId: agent.wallet.id,
+        agentId: agent.id,
       },
     }),
     prisma.vault.update({
-      where: { id: project.vault.id },
+      where: { id: agent.wallet.id },
       data: {
         balance: { increment: amount },
       },
@@ -131,7 +130,7 @@ export async function getUserSpendChartData(userId: string, days: number = 30) {
 
   const events = await prisma.event.findMany({
     where: {
-      vault: {
+      agent: {
         project: {
           userId,
         },

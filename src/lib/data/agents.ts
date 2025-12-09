@@ -1,7 +1,9 @@
 import { prisma } from "@/lib/db";
-import { Agent, AgentBudgetRule, Event } from "@/generated/prisma/client";
+import { generateSolanaVaultKeypair } from "@/lib/solana";
+import { Agent, AgentBudgetRule, Event, Vault } from "@/generated/prisma/client";
 
 export type AgentWithRelations = Agent & {
+  wallet: Vault | null;
   budgetRule: AgentBudgetRule | null;
   events: Event[];
 };
@@ -13,6 +15,7 @@ export type AgentSummary = {
   status: string;
   createdAt: Date;
   projectId: string;
+  walletBalance: bigint;
   dailyLimit: bigint;
   dailySpent: bigint;
   monthlySpent: bigint;
@@ -31,6 +34,7 @@ export async function getProjectAgents(projectId: string, userId: string): Promi
   const agents = await prisma.agent.findMany({
     where: { projectId },
     include: {
+      wallet: true,
       budgetRule: true,
       events: {
         where: { status: "confirmed", type: "spend" },
@@ -52,6 +56,7 @@ export async function getProjectAgents(projectId: string, userId: string): Promi
       status: agent.status,
       createdAt: agent.createdAt,
       projectId: agent.projectId,
+      walletBalance: agent.wallet?.balance ?? BigInt(0),
       dailyLimit: agent.budgetRule?.dailyLimit ?? BigInt(0),
       dailySpent: agent.budgetRule?.dailySpent ?? BigInt(0),
       monthlySpent: agent.budgetRule?.monthlySpent ?? BigInt(0),
@@ -68,6 +73,7 @@ export async function getAgent(
   const agent = await prisma.agent.findFirst({
     where: { id: agentId },
     include: {
+      wallet: true,
       budgetRule: true,
       events: {
         orderBy: { createdAt: "desc" },
@@ -101,12 +107,21 @@ export async function createAgent(
 
   if (!project) return null;
 
+  const { address, encryptedPrivateKey } = await generateSolanaVaultKeypair();
+
   return prisma.agent.create({
     data: {
       name: data.name,
       provider: data.provider,
       status: "needs_setup",
       projectId,
+      wallet: {
+        create: {
+          address,
+          encryptedPrivateKey,
+          balance: BigInt(0),
+        },
+      },
       budgetRule: {
         create: {
           dailyLimit: data.dailyLimit,
@@ -116,6 +131,7 @@ export async function createAgent(
       },
     },
     include: {
+      wallet: true,
       budgetRule: true,
     },
   });

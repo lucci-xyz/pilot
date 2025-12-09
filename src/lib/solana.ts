@@ -1,7 +1,58 @@
-import { Keypair } from "@solana/web3.js";
-import { createCipheriv, createHash, randomBytes } from "crypto";
+import {
+  createKeyPairFromPrivateKeyBytes,
+  createKeyPairSignerFromBytes,
+  getAddressFromPublicKey,
+  createSolanaRpc,
+  createSolanaRpcSubscriptions,
+  sendAndConfirmTransactionFactory,
+  createTransactionMessage,
+  setTransactionMessageFeePayer,
+  setTransactionMessageLifetimeUsingBlockhash,
+  appendTransactionMessageInstruction,
+  signTransactionMessageWithSigners,
+  assertIsTransactionWithBlockhashLifetime,
+  getSignatureFromTransaction,
+  address,
+  lamports,
+  type Address,
+  type KeyPairSigner,
+} from "@solana/kit";
+import { getTransferSolInstruction } from "@solana-program/system";
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  Transaction,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
+import { createTransferInstruction, getOrCreateAssociatedTokenAccount } from "@solana/spl-token";
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from "crypto";
 
 const ENCRYPTION_KEY_ENV = process.env.VAULT_ENCRYPTION_KEY;
+
+// Solana devnet RPC endpoint
+const SOLANA_DEVNET_RPC = process.env.SOLANA_RPC_URL || "https://api.devnet.solana.com";
+const SOLANA_DEVNET_WS = process.env.SOLANA_WS_URL || "wss://api.devnet.solana.com";
+
+// Lamports per SOL constant (1 SOL = 10^9 lamports)
+export const LAMPORTS_PER_SOL = BigInt(1_000_000_000);
+
+export const DEVNET_SPL_TOKENS = {
+  "USDC-DEV": {
+    mintAddress: "Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr",
+    decimals: 6,
+  },
+  USDC: {
+    mintAddress: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+    decimals: 6,
+  },
+} as const;
+
+export type SupportedSplTokenSymbol = keyof typeof DEVNET_SPL_TOKENS;
+
+export function normalizeTokenSymbol(token: string): string {
+  return token.trim().replace(/_/g, "-").toUpperCase();
+}
 
 function getEncryptionKey(): Buffer {
   if (!ENCRYPTION_KEY_ENV) {
@@ -24,13 +75,278 @@ export function encryptSecret(plaintext: string): string {
   return `${iv.toString("base64")}:${encrypted.toString("base64")}:${authTag.toString("base64")}`;
 }
 
-export function generateSolanaVaultKeypair(): { address: string; encryptedPrivateKey: string } {
-  const keypair = Keypair.generate();
-  const secretBase64 = Buffer.from(keypair.secretKey).toString("base64");
+export function decryptSecret(encrypted: string): string {
+  const key = getEncryptionKey();
+  const [ivBase64, ciphertextBase64, authTagBase64] = encrypted.split(":");
+
+  if (!ivBase64 || !ciphertextBase64 || !authTagBase64) {
+    throw new Error("Invalid encrypted format");
+  }
+
+  const iv = Buffer.from(ivBase64, "base64");
+  const ciphertext = Buffer.from(ciphertextBase64, "base64");
+  const authTag = Buffer.from(authTagBase64, "base64");
+
+  const decipher = createDecipheriv("aes-256-gcm", key, iv);
+  decipher.setAuthTag(authTag);
+
+  const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+  return decrypted.toString("utf8");
+}
+
+/**
+ * Generate a new Solana vault keypair and return the address and encrypted private key.
+ * Generates private key bytes ourselves to avoid non-extractable CryptoKey issues.
+ */
+export async function generateSolanaVaultKeypair(): Promise<{ address: string; encryptedPrivateKey: string }> {
+  // Generate 32 random bytes as the private key seed
+  const privateKeyBytes = randomBytes(32);
+  
+  // Create a keypair from the private key bytes
+  const keypair = await createKeyPairFromPrivateKeyBytes(new Uint8Array(privateKeyBytes));
+  
+  // Export the public key (public keys are always extractable)
+  const publicKeyBytes = new Uint8Array(await crypto.subtle.exportKey("raw", keypair.publicKey));
+  
+  // Combine into 64-byte secret key format (private + public) for compatibility
+  const secretKey = Buffer.concat([privateKeyBytes, publicKeyBytes]);
+  const secretBase64 = secretKey.toString("base64");
+  
+  // Get the address from the public key
+  const addressStr = await getAddressFromPublicKey(keypair.publicKey);
 
   return {
-    address: keypair.publicKey.toBase58(),
+    address: addressStr,
     encryptedPrivateKey: encryptSecret(secretBase64),
   };
 }
 
+/**
+ * Restore a KeyPairSigner from an encrypted private key.
+ * Uses @solana/kit's createKeyPairSignerFromBytes.
+ */
+export async function signerFromEncryptedSecret(encryptedPrivateKey: string): Promise<KeyPairSigner> {
+  const secretBase64 = decryptSecret(encryptedPrivateKey);
+  const secretKey = Buffer.from(secretBase64, "base64");
+  return createKeyPairSignerFromBytes(new Uint8Array(secretKey));
+}
+
+/**
+ * Create a Solana devnet RPC client.
+ */
+export function getDevnetRpc() {
+  return createSolanaRpc(SOLANA_DEVNET_RPC);
+}
+
+/**
+ * Create a Solana devnet RPC subscriptions client (for confirmations).
+ */
+export function getDevnetRpcSubscriptions() {
+  return createSolanaRpcSubscriptions(SOLANA_DEVNET_WS);
+}
+
+/**
+ * Create a web3.js connection to Solana devnet with confirmed commitment.
+ */
+export function getDevnetConnection() {
+  return new Connection(SOLANA_DEVNET_RPC, "confirmed");
+}
+
+/**
+ * Restore a web3.js Keypair from an encrypted private key.
+ */
+function keypairFromEncryptedSecret(encryptedPrivateKey: string): Keypair {
+  const secretBase64 = decryptSecret(encryptedPrivateKey);
+  const secretKey = Buffer.from(secretBase64, "base64");
+  return Keypair.fromSecretKey(new Uint8Array(secretKey));
+}
+
+/**
+ * Send SOL on devnet.
+ * 
+ * @param encryptedPrivateKey - The encrypted private key of the sender
+ * @param recipientAddress - The recipient's Solana address
+ * @param amountSol - Amount in SOL to send
+ * @returns Transaction signature
+ */
+export async function sendSolDevnet(
+  encryptedPrivateKey: string,
+  recipientAddress: string,
+  amountSol: number
+): Promise<string> {
+  const rpc = getDevnetRpc();
+  const rpcSubscriptions = getDevnetRpcSubscriptions();
+  
+  // Restore the signer from encrypted key
+  const sender = await signerFromEncryptedSecret(encryptedPrivateKey);
+  const recipient = address(recipientAddress);
+  
+  // Convert SOL to lamports
+  const lamportsAmount = lamports(BigInt(Math.round(amountSol * Number(LAMPORTS_PER_SOL))));
+  
+  // Get a recent blockhash
+  const { value: latestBlockhash } = await rpc.getLatestBlockhash().send();
+  
+  // Create the transfer instruction
+  const transferInstruction = getTransferSolInstruction({
+    source: sender,
+    destination: recipient,
+    amount: lamportsAmount,
+  });
+  
+  // Build the transaction message with explicit blockhash lifetime
+  const baseMessage = createTransactionMessage({ version: 0 });
+  const messageWithPayer = setTransactionMessageFeePayer(sender.address, baseMessage);
+  const messageWithLifetime = setTransactionMessageLifetimeUsingBlockhash(latestBlockhash, messageWithPayer);
+  const messageWithInstruction = appendTransactionMessageInstruction(transferInstruction, messageWithLifetime);
+  
+  // Sign the transaction
+  const signedTransaction = await signTransactionMessageWithSigners(messageWithInstruction);
+  
+  // Assert the transaction has blockhash lifetime (required by sendAndConfirm)
+  assertIsTransactionWithBlockhashLifetime(signedTransaction);
+  
+  // Create send and confirm function
+  const sendAndConfirm = sendAndConfirmTransactionFactory({ rpc, rpcSubscriptions });
+  
+  // Send and confirm
+  await sendAndConfirm(signedTransaction, { commitment: "confirmed" });
+  
+  // Get the signature from the signed transaction using Kit's built-in function
+  const signature = getSignatureFromTransaction(signedTransaction);
+  
+  return signature;
+}
+
+/**
+ * Send an SPL token on devnet using the provided mint.
+ *
+ * @param encryptedPrivateKey - Encrypted private key of the sender
+ * @param recipientAddress - Recipient's Solana address
+ * @param amountBaseUnits - Amount to send in the token's base units (e.g., 6 decimals for USDC)
+ * @param mintAddress - SPL token mint address
+ * @returns Transaction signature
+ */
+export async function sendSplTokenDevnet(
+  encryptedPrivateKey: string,
+  recipientAddress: string,
+  amountBaseUnits: bigint,
+  mintAddress: string
+): Promise<string> {
+  if (amountBaseUnits <= 0n) {
+    throw new Error("Amount must be greater than zero");
+  }
+
+  const connection = getDevnetConnection();
+  const payer = keypairFromEncryptedSecret(encryptedPrivateKey);
+
+  const mint = new PublicKey(mintAddress);
+  const recipient = new PublicKey(recipientAddress);
+
+  // Ensure both sides have an ATA for the mint; payer funds rent for creation.
+  const senderTokenAccount = await getOrCreateAssociatedTokenAccount(
+    connection,
+    payer,
+    mint,
+    payer.publicKey
+  );
+
+  const recipientTokenAccount = await getOrCreateAssociatedTokenAccount(
+    connection,
+    payer,
+    mint,
+    recipient
+  );
+
+  const transferIx = createTransferInstruction(
+    senderTokenAccount.address,
+    recipientTokenAccount.address,
+    payer.publicKey,
+    amountBaseUnits
+  );
+
+  const transaction = new Transaction().add(transferIx);
+
+  const signature = await sendAndConfirmTransaction(connection, transaction, [payer], {
+    commitment: "confirmed",
+  });
+
+  return signature;
+}
+
+/**
+ * Get SOL balance for an address on devnet.
+ */
+export async function getSolBalanceDevnet(addressStr: string): Promise<number> {
+  const rpc = getDevnetRpc();
+  const { value: lamportsBalance } = await rpc.getBalance(address(addressStr)).send();
+  return Number(lamportsBalance) / Number(LAMPORTS_PER_SOL);
+}
+
+/**
+ * X402 Payment details returned from a 402 response.
+ */
+export type X402PaymentDetails = {
+  // The recipient address for the payment
+  payTo: string;
+  // Amount to pay (in the smallest unit of the token)
+  amount: string;
+  // Token to use for payment (e.g., "SOL", "USDC")
+  token: string;
+  // Network to use (e.g., "solana-devnet")
+  network: string;
+  // Optional: USD equivalent of the payment amount
+  amountUsd?: number;
+  // Optional: expiration timestamp
+  expires?: number;
+  // Additional metadata
+  [key: string]: unknown;
+};
+
+/**
+ * Process an x402 payment on Solana devnet.
+ * Currently supports SOL transfers only (USDC SPL token support can be added).
+ * 
+ * @param encryptedPrivateKey - The encrypted private key of the payer
+ * @param paymentDetails - The x402 payment details from the 402 response
+ * @returns Transaction signature
+ */
+export async function processX402PaymentSolana(
+  encryptedPrivateKey: string,
+  paymentDetails: X402PaymentDetails
+): Promise<string> {
+  const { payTo, amount, token, network } = paymentDetails;
+  const normalizedToken = normalizeTokenSymbol(token);
+  const normalizedNetwork = network.toLowerCase();
+  const isDevnet = normalizedNetwork === "solana-devnet";
+
+  // Validate network
+  if (!isDevnet && normalizedNetwork !== "solana") {
+    throw new Error(`Unsupported network for x402 payment: ${network}`);
+  }
+
+  if (normalizedToken === "SOL") {
+    // Amount is in lamports for SOL
+    const amountSol = parseInt(amount, 10) / Number(LAMPORTS_PER_SOL);
+    return sendSolDevnet(encryptedPrivateKey, payTo, amountSol);
+  }
+
+  const tokenInfo = DEVNET_SPL_TOKENS[normalizedToken as SupportedSplTokenSymbol];
+
+  if (!tokenInfo) {
+    throw new Error(`Token ${token} not supported for x402 payments.`);
+  }
+
+  if (!isDevnet) {
+    throw new Error(`Token ${token} is only supported on solana-devnet.`);
+  }
+
+  let amountBaseUnits: bigint;
+  try {
+    amountBaseUnits = BigInt(amount);
+  } catch {
+    throw new Error(`Invalid amount for token ${token}: ${amount}`);
+  }
+
+  return sendSplTokenDevnet(encryptedPrivateKey, payTo, amountBaseUnits, tokenInfo.mintAddress);
+}
