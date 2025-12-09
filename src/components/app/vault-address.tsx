@@ -77,9 +77,22 @@ export function VaultAddress({
       <div className="space-y-3">
         {/* Address info */}
         <div>
-          <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-400">
-            Wallet address
-          </p>
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-400">
+              Wallet address
+            </p>
+            <button
+              onClick={handleCopy}
+              className="flex h-5 w-5 items-center justify-center rounded hover:bg-neutral-100 transition-colors"
+              aria-label="Copy vault address"
+            >
+              {copied ? (
+                <Check className="h-3 w-3 text-emerald-600" strokeWidth={2} />
+              ) : (
+                <Copy className="h-3 w-3 text-neutral-400 hover:text-neutral-600" strokeWidth={1.5} />
+              )}
+            </button>
+          </div>
           <p className="mt-1 font-mono text-[12px] text-neutral-900 break-all">{address}</p>
           <p className="text-[12px] text-neutral-500">Solana • {clusterLabel}</p>
         </div>
@@ -103,41 +116,57 @@ export function VaultAddress({
               <DialogHeader>
                 <DialogTitle className="text-base">Token Balances</DialogTitle>
               </DialogHeader>
-              <div className="space-y-3">
-                {tokenBalances.map((t) => (
-                  <div
-                    key={t.label}
-                    className="flex items-center justify-between rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-3"
-                  >
-                    <span className="text-[13px] font-medium text-neutral-700">{t.label}</span>
-                    <span className="text-[15px] font-semibold text-neutral-900">
-                      {t.isLoading ? "..." : t.value !== null ? t.value.toFixed(4) : "—"}
-                    </span>
+              <div className="space-y-4">
+                <div className="space-y-3">
+                  {tokenBalances.map((t) => (
+                    <div
+                      key={t.label}
+                      className="flex items-center justify-between rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-3"
+                    >
+                      <span className="text-[13px] font-medium text-neutral-700">{t.label}</span>
+                      <span className="text-[15px] font-semibold text-neutral-900">
+                        {t.isLoading ? "..." : t.value !== null ? t.value.toFixed(4) : "—"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                
+                {/* Funding Actions */}
+                <div className="border-t border-neutral-100 pt-4">
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-400 mb-3">
+                    Fund Wallet
+                  </p>
+                  <div className="flex gap-2">
+                    <FundWalletDialog
+                      walletAddress={address}
+                      walletOwnerName={walletName}
+                      onSuccess={handleFundSuccess}
+                    >
+                      <Button className="flex-1 h-9 bg-neutral-900 text-[12px] hover:bg-neutral-800">
+                        <Wallet className="h-3.5 w-3.5" strokeWidth={1.5} />
+                        Fund Wallet
+                      </Button>
+                    </FundWalletDialog>
+                    
+                    {cluster === "devnet" && (
+                      <Button
+                        asChild
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 h-9 text-[12px]"
+                        aria-label="Get devnet SOL from faucet"
+                      >
+                        <a href={faucetUrl} target="_blank" rel="noreferrer">
+                          <Droplets className="h-3.5 w-3.5" strokeWidth={1.5} />
+                          SOL Faucet
+                        </a>
+                      </Button>
+                    )}
                   </div>
-                ))}
+                </div>
               </div>
             </DialogContent>
           </Dialog>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleCopy}
-            className="h-8 px-3 text-[12px]"
-            aria-label="Copy vault address"
-          >
-            {copied ? (
-              <>
-                <Check className="h-3.5 w-3.5" strokeWidth={1.5} />
-                Copied
-              </>
-            ) : (
-              <>
-                <Copy className="h-3.5 w-3.5" strokeWidth={1.5} />
-                Copy
-              </>
-            )}
-          </Button>
           
           <Button
             asChild
@@ -151,29 +180,6 @@ export function VaultAddress({
               Explorer
             </a>
           </Button>
-
-          {/* Fund wallet button - opens dialog */}
-          <FundWalletDialog
-            walletAddress={address}
-            walletOwnerName={walletName}
-            onSuccess={handleFundSuccess}
-          />
-
-          {/* Devnet faucet shortcut */}
-          {cluster === "devnet" && (
-            <Button
-              asChild
-              variant="outline"
-              size="sm"
-              className="h-8 px-3 text-[12px]"
-              aria-label="Get devnet SOL from faucet"
-            >
-              <a href={faucetUrl} target="_blank" rel="noreferrer">
-                <Droplets className="h-3.5 w-3.5" strokeWidth={1.5} />
-                Faucet
-              </a>
-            </Button>
-          )}
         </div>
       </div>
     </div>

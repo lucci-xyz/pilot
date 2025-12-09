@@ -146,7 +146,7 @@ export default async function AgentPage({ params }: AgentPageProps) {
           </div>
 
           {/* Main Content Grid */}
-          <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr]">
+          <div className="grid gap-4 lg:grid-cols-[1fr_1.5fr]">
             
             {/* Left: Wallet, Budget & Integration */}
             <div className="space-y-4">

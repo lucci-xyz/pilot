@@ -1,18 +1,11 @@
 "use client";
 
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { cn } from "@/lib/utils";
-
-type Transaction = {
-  id: string;
-  type: string;
-  amount: bigint;
-  createdAt: Date;
-  status: string;
-};
+import { Event } from "@/generated/prisma/client";
 
 interface TransactionChartProps {
-  events: Transaction[];
+  events: Event[];
 }
 
 export function TransactionChart({ events }: TransactionChartProps) {
@@ -59,11 +52,11 @@ export function TransactionChart({ events }: TransactionChartProps) {
           </p>
           <div className="mt-2 flex items-center gap-4">
             <div className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-blue-500" />
+              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: "#d97757" }} />
               <span className="text-[11px] text-neutral-600">Spend</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: "#16a34a" }} />
               <span className="text-[11px] text-neutral-600">Funding</span>
             </div>
           </div>
@@ -71,39 +64,50 @@ export function TransactionChart({ events }: TransactionChartProps) {
       </div>
 
       {!hasData ? (
-        <div className="flex h-[200px] items-center justify-center">
+        <div className="flex h-[280px] items-center justify-center">
           <p className="text-[12px] text-neutral-500">No transactions yet</p>
         </div>
       ) : (
-        <ResponsiveContainer width="100%" height={200}>
-          <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
-            <XAxis
-              dataKey="date"
-              tick={{ fontSize: 11, fill: "#999" }}
-              axisLine={{ stroke: "#e5e5e5" }}
-              tickLine={false}
-            />
-            <YAxis
-              tick={{ fontSize: 11, fill: "#999" }}
-              axisLine={{ stroke: "#e5e5e5" }}
-              tickLine={false}
-              tickFormatter={(value) => `$${value}`}
-            />
-            <Tooltip
-              contentStyle={{
-                backgroundColor: "white",
-                border: "1px solid #e5e5e5",
-                borderRadius: "8px",
-                fontSize: "12px",
-              }}
-              formatter={(value: number) => [`$${value.toFixed(2)}`, ""]}
-              labelStyle={{ fontWeight: 600, marginBottom: "4px" }}
-            />
-            <Bar dataKey="spending" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-            <Bar dataKey="funding" fill="#10b981" radius={[4, 4, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
+        <div className="[&_.recharts-active-bar]:hidden">
+          <ResponsiveContainer width="100%" height={280}>
+            <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+              <XAxis
+                dataKey="date"
+                tick={{ fontSize: 11, fill: "#999" }}
+                axisLine={{ stroke: "#e5e5e5" }}
+                tickLine={false}
+              />
+              <YAxis
+                tick={{ fontSize: 11, fill: "#999" }}
+                axisLine={{ stroke: "#e5e5e5" }}
+                tickLine={false}
+                tickFormatter={(value) => `$${value}`}
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: "white",
+                  border: "1px solid #e5e5e5",
+                  borderRadius: "8px",
+                  fontSize: "12px",
+                }}
+                formatter={(value: number) => [`$${value.toFixed(2)}`, ""]}
+                labelStyle={{ fontWeight: 600, marginBottom: "4px" }}
+                cursor={false}
+              />
+              <Bar 
+                dataKey="spending" 
+                fill="#d97757" 
+                radius={[4, 4, 0, 0]}
+              />
+              <Bar 
+                dataKey="funding" 
+                fill="#16a34a" 
+                radius={[4, 4, 0, 0]}
+              />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
       )}
 
       {/* Recent transactions list below chart */}
@@ -117,10 +121,10 @@ export function TransactionChart({ events }: TransactionChartProps) {
               <div key={e.id} className="flex items-center justify-between text-[11px]">
                 <div className="flex items-center gap-2">
                   <span
-                    className={cn(
-                      "h-1.5 w-1.5 rounded-full",
-                      e.type === "funding" ? "bg-emerald-500" : "bg-blue-500"
-                    )}
+                    className="h-1.5 w-1.5 rounded-full"
+                    style={{
+                      backgroundColor: e.type === "funding" ? "#16a34a" : "#d97757",
+                    }}
                   />
                   <span className="text-neutral-600 capitalize">{e.type}</span>
                   <span className="text-neutral-400">
@@ -131,10 +135,10 @@ export function TransactionChart({ events }: TransactionChartProps) {
                   </span>
                 </div>
                 <span
-                  className={cn(
-                    "font-medium",
-                    e.type === "funding" ? "text-emerald-600" : "text-neutral-700"
-                  )}
+                  className="font-medium"
+                  style={{
+                    color: e.type === "funding" ? "#16a34a" : "#d97757",
+                  }}
                 >
                   {e.type === "funding" ? "+" : "-"}$
                   {(Math.abs(Number(e.amount)) / 1_000_000).toFixed(2)}
