@@ -5,7 +5,14 @@ import { Check, Copy, ExternalLink, Droplets } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FundWalletDialog } from "@/components/app/fund-wallet-dialog";
 import { useWalletBalance } from "@/hooks/use-wallet-balance";
+import { useSplTokenBalance } from "@/hooks/use-spl-token-balance";
 import { cn } from "@/lib/utils";
+
+const TOKEN_OPTIONS = [
+  { symbol: "SOL", label: "SOL", kind: "native" as const, decimals: 9 },
+  { symbol: "USDC-DEV", label: "USDC-Dev", kind: "spl" as const, mint: "Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr", decimals: 6 },
+  { symbol: "USDC", label: "USDC", kind: "spl" as const, mint: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU", decimals: 6 },
+] as const;
 
 type VaultAddressProps = {
   address?: string | null;
@@ -22,6 +29,16 @@ export function VaultAddress({
 }: VaultAddressProps) {
   const [copied, setCopied] = useState(false);
   const { balance, isLoading, refetch } = useWalletBalance(address);
+  const { balance: usdcDevBalance, refetch: refetchUsdcDev } = useSplTokenBalance(
+    address ?? null,
+    TOKEN_OPTIONS[1].mint,
+    TOKEN_OPTIONS[1].decimals
+  );
+  const { balance: usdcBalance, refetch: refetchUsdc } = useSplTokenBalance(
+    address ?? null,
+    TOKEN_OPTIONS[2].mint,
+    TOKEN_OPTIONS[2].decimals
+  );
 
   if (!address) return null;
 
@@ -42,27 +59,47 @@ export function VaultAddress({
   const handleFundSuccess = () => {
     // Refetch balance after successful funding
     refetch();
+    refetchUsdcDev();
+    refetchUsdc();
   };
+
+  const tokenBalances = [
+    { label: "SOL", value: balance, isLoading },
+    { label: "USDC-Dev", value: usdcDevBalance, isLoading: false },
+    { label: "USDC", value: usdcBalance, isLoading: false },
+  ];
 
   return (
     <div className={cn("rounded-xl border border-neutral-100 bg-white p-4 shadow-soft", className)}>
       <div className="space-y-4">
-        {/* Address and balance info */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex-1">
-            <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-400">
-              Wallet address
-            </p>
-            <p className="mt-1 font-mono text-[12px] text-neutral-900 break-all">{address}</p>
-            <p className="text-[12px] text-neutral-500">Solana • {clusterLabel}</p>
-          </div>
-          <div className="text-right">
-            <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-400">
-              SOL Balance
-            </p>
-            <p className="mt-1 text-[15px] font-semibold text-neutral-900">
-              {isLoading ? "..." : balance !== null ? `${balance.toFixed(4)} SOL` : "—"}
-            </p>
+        {/* Address info */}
+        <div>
+          <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-400">
+            Wallet address
+          </p>
+          <p className="mt-1 font-mono text-[12px] text-neutral-900 break-all">{address}</p>
+          <p className="text-[12px] text-neutral-500">Solana • {clusterLabel}</p>
+        </div>
+
+        {/* Token Balances Grid */}
+        <div>
+          <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-400 mb-2">
+            Balances
+          </p>
+          <div className="grid grid-cols-3 gap-2">
+            {tokenBalances.map((t) => (
+              <div
+                key={t.label}
+                className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2"
+              >
+                <p className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">
+                  {t.label}
+                </p>
+                <p className="mt-0.5 text-[14px] font-semibold text-neutral-900">
+                  {t.isLoading ? "..." : t.value !== null ? t.value.toFixed(4) : "—"}
+                </p>
+              </div>
+            ))}
           </div>
         </div>
 

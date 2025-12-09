@@ -18,6 +18,14 @@ import {
   type KeyPairSigner,
 } from "@solana/kit";
 import { getTransferSolInstruction } from "@solana-program/system";
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  Transaction,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
+import { createTransferInstruction, getOrCreateAssociatedTokenAccount } from "@solana/spl-token";
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "crypto";
 
 const ENCRYPTION_KEY_ENV = process.env.VAULT_ENCRYPTION_KEY;
@@ -28,6 +36,23 @@ const SOLANA_DEVNET_WS = process.env.SOLANA_WS_URL || "wss://api.devnet.solana.c
 
 // Lamports per SOL constant (1 SOL = 10^9 lamports)
 export const LAMPORTS_PER_SOL = BigInt(1_000_000_000);
+
+export const DEVNET_SPL_TOKENS = {
+  "USDC-DEV": {
+    mintAddress: "Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr",
+    decimals: 6,
+  },
+  USDC: {
+    mintAddress: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+    decimals: 6,
+  },
+} as const;
+
+export type SupportedSplTokenSymbol = keyof typeof DEVNET_SPL_TOKENS;
+
+export function normalizeTokenSymbol(token: string): string {
+  return token.trim().replace(/_/g, "-").toUpperCase();
+}
 
 function getEncryptionKey(): Buffer {
   if (!ENCRYPTION_KEY_ENV) {
@@ -121,6 +146,22 @@ export function getDevnetRpcSubscriptions() {
 }
 
 /**
+ * Create a web3.js connection to Solana devnet with confirmed commitment.
+ */
+export function getDevnetConnection() {
+  return new Connection(SOLANA_DEVNET_RPC, "confirmed");
+}
+
+/**
+ * Restore a web3.js Keypair from an encrypted private key.
+ */
+function keypairFromEncryptedSecret(encryptedPrivateKey: string): Keypair {
+  const secretBase64 = decryptSecret(encryptedPrivateKey);
+  const secretKey = Buffer.from(secretBase64, "base64");
+  return Keypair.fromSecretKey(new Uint8Array(secretKey));
+}
+
+/**
  * Send SOL on devnet.
  * 
  * @param encryptedPrivateKey - The encrypted private key of the sender
@@ -178,6 +219,62 @@ export async function sendSolDevnet(
 }
 
 /**
+ * Send an SPL token on devnet using the provided mint.
+ *
+ * @param encryptedPrivateKey - Encrypted private key of the sender
+ * @param recipientAddress - Recipient's Solana address
+ * @param amountBaseUnits - Amount to send in the token's base units (e.g., 6 decimals for USDC)
+ * @param mintAddress - SPL token mint address
+ * @returns Transaction signature
+ */
+export async function sendSplTokenDevnet(
+  encryptedPrivateKey: string,
+  recipientAddress: string,
+  amountBaseUnits: bigint,
+  mintAddress: string
+): Promise<string> {
+  if (amountBaseUnits <= 0n) {
+    throw new Error("Amount must be greater than zero");
+  }
+
+  const connection = getDevnetConnection();
+  const payer = keypairFromEncryptedSecret(encryptedPrivateKey);
+
+  const mint = new PublicKey(mintAddress);
+  const recipient = new PublicKey(recipientAddress);
+
+  // Ensure both sides have an ATA for the mint; payer funds rent for creation.
+  const senderTokenAccount = await getOrCreateAssociatedTokenAccount(
+    connection,
+    payer,
+    mint,
+    payer.publicKey
+  );
+
+  const recipientTokenAccount = await getOrCreateAssociatedTokenAccount(
+    connection,
+    payer,
+    mint,
+    recipient
+  );
+
+  const transferIx = createTransferInstruction(
+    senderTokenAccount.address,
+    recipientTokenAccount.address,
+    payer.publicKey,
+    amountBaseUnits
+  );
+
+  const transaction = new Transaction().add(transferIx);
+
+  const signature = await sendAndConfirmTransaction(connection, transaction, [payer], {
+    commitment: "confirmed",
+  });
+
+  return signature;
+}
+
+/**
  * Get SOL balance for an address on devnet.
  */
 export async function getSolBalanceDevnet(addressStr: string): Promise<number> {
@@ -219,22 +316,37 @@ export async function processX402PaymentSolana(
   paymentDetails: X402PaymentDetails
 ): Promise<string> {
   const { payTo, amount, token, network } = paymentDetails;
+  const normalizedToken = normalizeTokenSymbol(token);
+  const normalizedNetwork = network.toLowerCase();
+  const isDevnet = normalizedNetwork === "solana-devnet";
 
   // Validate network
-  if (network !== "solana-devnet" && network !== "solana") {
+  if (!isDevnet && normalizedNetwork !== "solana") {
     throw new Error(`Unsupported network for x402 payment: ${network}`);
   }
 
-  // For now, we only support SOL transfers on devnet
-  // USDC SPL token transfers would require additional setup with @solana-program/token
-  if (token !== "SOL") {
-    throw new Error(
-      `Token ${token} not supported for x402 payments yet. Only SOL is supported on devnet.`
-    );
+  if (normalizedToken === "SOL") {
+    // Amount is in lamports for SOL
+    const amountSol = parseInt(amount, 10) / Number(LAMPORTS_PER_SOL);
+    return sendSolDevnet(encryptedPrivateKey, payTo, amountSol);
   }
 
-  // Amount is in lamports for SOL
-  const amountSol = parseInt(amount, 10) / Number(LAMPORTS_PER_SOL);
+  const tokenInfo = DEVNET_SPL_TOKENS[normalizedToken as SupportedSplTokenSymbol];
 
-  return sendSolDevnet(encryptedPrivateKey, payTo, amountSol);
+  if (!tokenInfo) {
+    throw new Error(`Token ${token} not supported for x402 payments.`);
+  }
+
+  if (!isDevnet) {
+    throw new Error(`Token ${token} is only supported on solana-devnet.`);
+  }
+
+  let amountBaseUnits: bigint;
+  try {
+    amountBaseUnits = BigInt(amount);
+  } catch {
+    throw new Error(`Invalid amount for token ${token}: ${amount}`);
+  }
+
+  return sendSplTokenDevnet(encryptedPrivateKey, payTo, amountBaseUnits, tokenInfo.mintAddress);
 }

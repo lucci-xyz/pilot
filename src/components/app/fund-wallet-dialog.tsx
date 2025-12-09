@@ -15,8 +15,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useFundWallet } from "@/hooks/use-fund-wallet";
+import { useSplTokenBalance } from "@/hooks/use-spl-token-balance";
 import { useWalletBalance } from "@/hooks/use-wallet-balance";
 import { WalletSelectDialog } from "./wallet-select-dialog";
+
+const TOKEN_OPTIONS = [
+  { symbol: "SOL", label: "SOL", kind: "native" as const },
+  { symbol: "USDC-DEV", label: "USDC-Dev", kind: "spl" as const, mint: "Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr", decimals: 6 },
+  { symbol: "USDC", label: "USDC", kind: "spl" as const, mint: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU", decimals: 6 },
+] as const;
+
+type TokenSymbol = (typeof TOKEN_OPTIONS)[number]["symbol"];
 
 type FundWalletDialogProps = {
   walletAddress: string;
@@ -34,12 +43,19 @@ export function FundWalletDialog({
   const [open, setOpen] = useState(false);
   const [walletSelectOpen, setWalletSelectOpen] = useState(false);
   const [amount, setAmount] = useState("");
+  const [tokenSymbol, setTokenSymbol] = useState<TokenSymbol>("SOL");
   
   const { connected, publicKey, disconnect, wallet } = useWallet();
-  const { state, fundWallet, reset } = useFundWallet();
-  const { balance: connectedWalletBalance, refetch: refetchBalance } = useWalletBalance(
-    publicKey?.toBase58()
-  );
+  const { state, fundWallet, fundSplToken, reset } = useFundWallet();
+  const { balance: solBalance, refetch: refetchSolBalance } = useWalletBalance(publicKey?.toBase58());
+  const {
+    balance: usdcDevBalance,
+    refetch: refetchUsdcDevBalance,
+  } = useSplTokenBalance(publicKey ?? null, TOKEN_OPTIONS[1].mint, TOKEN_OPTIONS[1].decimals);
+  const {
+    balance: usdcBalance,
+    refetch: refetchUsdcBalance,
+  } = useSplTokenBalance(publicKey ?? null, TOKEN_OPTIONS[2].mint, TOKEN_OPTIONS[2].decimals);
 
   // Reset state when dialog closes
   useEffect(() => {
@@ -49,13 +65,43 @@ export function FundWalletDialog({
     }
   }, [open, reset]);
 
+  const selectedToken = TOKEN_OPTIONS.find((t) => t.symbol === tokenSymbol) ?? TOKEN_OPTIONS[0];
+
+  const selectedBalance =
+    selectedToken.symbol === "SOL"
+      ? solBalance
+      : selectedToken.symbol === "USDC-DEV"
+        ? usdcDevBalance
+        : usdcBalance;
+
   const handleFund = async () => {
     const amountNum = parseFloat(amount);
     if (isNaN(amountNum) || amountNum <= 0) return;
 
-    const signature = await fundWallet(walletAddress, amountNum);
+    let signature: string | null = null;
+
+    if (selectedToken.kind === "native") {
+      signature = await fundWallet(walletAddress, amountNum);
+      if (signature) {
+        refetchSolBalance();
+      }
+    } else {
+      signature = await fundSplToken(
+        walletAddress,
+        amountNum,
+        selectedToken.mint,
+        selectedToken.decimals
+      );
+      if (signature) {
+        if (selectedToken.symbol === "USDC-DEV") {
+          refetchUsdcDevBalance();
+        } else {
+          refetchUsdcBalance();
+        }
+      }
+    }
+
     if (signature) {
-      refetchBalance();
       onSuccess?.();
     }
   };
@@ -65,7 +111,7 @@ export function FundWalletDialog({
   };
 
   const amountNum = parseFloat(amount) || 0;
-  const hasInsufficientFunds = connectedWalletBalance !== null && amountNum > connectedWalletBalance;
+  const hasInsufficientFunds = selectedBalance !== null && amountNum > selectedBalance;
 
   // Get wallet icon
   const walletIcon = wallet?.adapter?.icon;
@@ -85,7 +131,7 @@ export function FundWalletDialog({
           <DialogHeader>
             <DialogTitle className="text-[15px]">Fund wallet</DialogTitle>
             <DialogDescription className="text-[13px]">
-              Transfer SOL from your wallet to {walletOwnerName}&apos;s devnet wallet.
+              Transfer {selectedToken.label} from your wallet to {walletOwnerName}&apos;s devnet wallet.
             </DialogDescription>
           </DialogHeader>
 
@@ -100,7 +146,7 @@ export function FundWalletDialog({
                       Transaction successful!
                     </p>
                     <p className="mt-1 text-[12px] text-emerald-700">
-                      {amount} SOL has been sent to the wallet.
+                      {amount} {selectedToken.label} has been sent to the wallet.
                     </p>
                     <a
                       href={`https://explorer.solana.com/tx/${state.txSignature}?cluster=devnet`}
@@ -176,8 +222,8 @@ export function FundWalletDialog({
                         Balance
                       </p>
                       <p className="text-[13px] font-medium text-neutral-900">
-                        {connectedWalletBalance !== null
-                          ? `${connectedWalletBalance.toFixed(4)} SOL`
+                        {selectedBalance !== null
+                          ? `${selectedBalance.toFixed(4)} ${selectedToken.label}`
                           : "Loading..."}
                       </p>
                     </div>
@@ -192,26 +238,47 @@ export function FundWalletDialog({
                   </Button>
                 </div>
 
-                {/* Amount input */}
+                {/* Token selection and amount */}
                 {!state.txSignature && (
-                  <div className="space-y-2">
-                    <Label htmlFor="amount" className="text-[12px]">
-                      Amount (SOL)
-                    </Label>
-                    <Input
-                      id="amount"
-                      type="number"
-                      step="0.001"
-                      min="0"
-                      placeholder="0.1"
-                      value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
-                      className="h-10 text-[13px]"
-                      disabled={state.isLoading}
-                    />
-                    {hasInsufficientFunds && (
-                      <p className="text-[12px] text-red-500">Insufficient balance</p>
-                    )}
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="token" className="text-[12px]">
+                        Token
+                      </Label>
+                      <select
+                        id="token"
+                        value={tokenSymbol}
+                        onChange={(e) => setTokenSymbol(e.target.value as TokenSymbol)}
+                        className="h-10 w-full rounded-md border border-neutral-200 bg-white px-3 text-[13px] text-neutral-900 shadow-sm focus:border-neutral-400 focus:outline-none"
+                        disabled={state.isLoading}
+                      >
+                        {TOKEN_OPTIONS.map((token) => (
+                          <option key={token.symbol} value={token.symbol}>
+                            {token.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="amount" className="text-[12px]">
+                        Amount ({selectedToken.label})
+                      </Label>
+                      <Input
+                        id="amount"
+                        type="number"
+                        step="0.001"
+                        min="0"
+                        placeholder="0.1"
+                        value={amount}
+                        onChange={(e) => setAmount(e.target.value)}
+                        className="h-10 text-[13px]"
+                        disabled={state.isLoading}
+                      />
+                      {hasInsufficientFunds && (
+                        <p className="text-[12px] text-red-500">Insufficient balance</p>
+                      )}
+                    </div>
                   </div>
                 )}
 
@@ -243,7 +310,7 @@ export function FundWalletDialog({
                         Processing...
                       </>
                     ) : (
-                      `Send ${amount || "0"} SOL`
+                      `Send ${amount || "0"} ${selectedToken.label}`
                     )}
                   </Button>
                 )}

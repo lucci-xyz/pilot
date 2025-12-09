@@ -1,5 +1,11 @@
 import { prisma } from "@/lib/db";
-import { processX402PaymentSolana, X402PaymentDetails, LAMPORTS_PER_SOL } from "@/lib/solana";
+import {
+  DEVNET_SPL_TOKENS,
+  LAMPORTS_PER_SOL,
+  X402PaymentDetails,
+  normalizeTokenSymbol,
+  processX402PaymentSolana,
+} from "@/lib/solana";
 import { assertAgentWithinBudget, recordAgentTransaction, BudgetExceededError } from "@/lib/data/budget";
 import { Prisma } from "@/generated/prisma/client";
 
@@ -103,20 +109,24 @@ async function parseX402PaymentDetails(response: Response): Promise<X402PaymentD
  * For devnet, we use approximate prices. In production, you'd use an oracle or price feed.
  */
 function tokenAmountToUsd(amount: string, token: string): number {
-  const numAmount = parseFloat(amount);
+  const normalizedToken = normalizeTokenSymbol(token);
 
-  switch (token.toUpperCase()) {
-    case "SOL":
-      // Convert lamports to SOL, then to USD (using approximate devnet price ~$150)
-      const solAmount = numAmount / Number(LAMPORTS_PER_SOL);
-      return solAmount * 150; // Approximate SOL price in USD
-    case "USDC":
-      // USDC is 1:1 with USD, but has 6 decimals
-      return numAmount / 1_000_000;
-    default:
-      // For unknown tokens, assume 1:1 with USD
-      return numAmount;
+  if (normalizedToken === "SOL") {
+    // Convert lamports to SOL, then to USD (using approximate devnet price ~$150)
+    const lamportsAmount = Number.parseFloat(amount);
+    const solAmount = lamportsAmount / Number(LAMPORTS_PER_SOL);
+    return solAmount * 150;
   }
+
+  const splToken = DEVNET_SPL_TOKENS[normalizedToken as keyof typeof DEVNET_SPL_TOKENS];
+
+  if (splToken) {
+    const baseUnitAmount = Number.parseFloat(amount);
+    return baseUnitAmount / 10 ** splToken.decimals;
+  }
+
+  // For unknown tokens, assume 1:1 with USD
+  return Number.parseFloat(amount);
 }
 
 /**
@@ -175,15 +185,22 @@ export async function callMeteredEndpointWithX402(args: X402CallArgs): Promise<X
     );
   }
 
+  const normalizedToken = normalizeTokenSymbol(paymentDetails.token);
+  const normalizedPaymentDetails: X402PaymentDetails = {
+    ...paymentDetails,
+    token: normalizedToken,
+  };
+
   // Calculate USD amount
-  const amountUsd = paymentDetails.amountUsd ?? tokenAmountToUsd(paymentDetails.amount, paymentDetails.token);
+  const amountUsd = normalizedPaymentDetails.amountUsd
+    ?? tokenAmountToUsd(normalizedPaymentDetails.amount, normalizedToken);
 
   // Check if payment is expired
-  if (paymentDetails.expires && Date.now() > paymentDetails.expires) {
+  if (normalizedPaymentDetails.expires && Date.now() > normalizedPaymentDetails.expires) {
     throw new X402PaymentError(
       "Payment request has expired",
       "PAYMENT_EXPIRED",
-      { expires: paymentDetails.expires }
+      { expires: normalizedPaymentDetails.expires }
     );
   }
 
@@ -206,10 +223,7 @@ export async function callMeteredEndpointWithX402(args: X402CallArgs): Promise<X
   // Process the payment
   let txSignature: string;
   try {
-    txSignature = await processX402PaymentSolana(
-      wallet.encryptedPrivateKey,
-      paymentDetails
-    );
+    txSignature = await processX402PaymentSolana(wallet.encryptedPrivateKey, normalizedPaymentDetails);
   } catch (error) {
     throw new X402PaymentError(
       `Payment transaction failed: ${error instanceof Error ? error.message : "Unknown error"}`,
@@ -223,7 +237,7 @@ export async function callMeteredEndpointWithX402(args: X402CallArgs): Promise<X
     agentId,
     projectId,
     amountUsd: new Decimal(amountUsd),
-    token: paymentDetails.token,
+    token: normalizedToken,
     txSignature,
     description: `x402 payment for ${url}`,
     status: "confirmed",
@@ -235,8 +249,8 @@ export async function callMeteredEndpointWithX402(args: X402CallArgs): Promise<X
     headers: {
       ...requestOptions.headers,
       "X-Payment": txSignature,
-      "X-Payment-Token": paymentDetails.token,
-      "X-Payment-Network": paymentDetails.network,
+        "X-Payment-Token": normalizedToken,
+        "X-Payment-Network": normalizedPaymentDetails.network,
     } as Record<string, string>,
   });
 
@@ -246,7 +260,7 @@ export async function callMeteredEndpointWithX402(args: X402CallArgs): Promise<X
     paymentDetails: {
       amountUsd,
       txSignature,
-      token: paymentDetails.token,
+      token: normalizedToken,
     },
   };
 }

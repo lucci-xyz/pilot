@@ -3,7 +3,17 @@
 import { useState, useCallback } from "react";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { WalletNotConnectedError } from "@solana/wallet-adapter-base";
-import { PublicKey, SystemProgram, Transaction, LAMPORTS_PER_SOL } from "@solana/web3.js";
+import {
+  PublicKey,
+  SystemProgram,
+  Transaction,
+  LAMPORTS_PER_SOL,
+} from "@solana/web3.js";
+import {
+  createAssociatedTokenAccountInstruction,
+  createTransferInstruction,
+  getAssociatedTokenAddressSync,
+} from "@solana/spl-token";
 
 export type FundWalletState = {
   isLoading: boolean;
@@ -14,6 +24,12 @@ export type FundWalletState = {
 export type UseFundWalletReturn = {
   state: FundWalletState;
   fundWallet: (recipientAddress: string, amountSol: number) => Promise<string | null>;
+  fundSplToken: (
+    recipientAddress: string,
+    amountTokens: number,
+    mintAddress: string,
+    decimals: number
+  ) => Promise<string | null>;
   reset: () => void;
 };
 
@@ -85,5 +101,73 @@ export function useFundWallet(): UseFundWalletReturn {
     [connection, publicKey, sendTransaction]
   );
 
-  return { state, fundWallet, reset };
+  const fundSplToken = useCallback(
+    async (
+      recipientAddress: string,
+      amountTokens: number,
+      mintAddress: string,
+      decimals: number
+    ): Promise<string | null> => {
+      if (!publicKey) {
+        setState({ isLoading: false, error: "Wallet not connected", txSignature: null });
+        return null;
+      }
+
+      if (amountTokens <= 0) {
+        setState({ isLoading: false, error: "Amount must be greater than 0", txSignature: null });
+        return null;
+      }
+
+      setState({ isLoading: true, error: null, txSignature: null });
+
+      try {
+        const mint = new PublicKey(mintAddress);
+        const recipient = new PublicKey(recipientAddress);
+
+        const amountBaseUnits = BigInt(Math.round(amountTokens * 10 ** decimals));
+        const transaction = new Transaction();
+
+        // Ensure ATAs exist
+        const fromAta = getAssociatedTokenAddressSync(mint, publicKey);
+        const toAta = getAssociatedTokenAddressSync(mint, recipient, true);
+
+        const fromAtaInfo = await connection.getAccountInfo(fromAta);
+        if (!fromAtaInfo) {
+          transaction.add(
+            createAssociatedTokenAccountInstruction(publicKey, fromAta, publicKey, mint)
+          );
+        }
+
+        const toAtaInfo = await connection.getAccountInfo(toAta);
+        if (!toAtaInfo) {
+          transaction.add(createAssociatedTokenAccountInstruction(publicKey, toAta, recipient, mint));
+        }
+
+        transaction.add(createTransferInstruction(fromAta, toAta, publicKey, amountBaseUnits));
+
+        const {
+          context: { slot: minContextSlot },
+          value: { blockhash, lastValidBlockHeight },
+        } = await connection.getLatestBlockhashAndContext();
+
+        transaction.recentBlockhash = blockhash;
+        transaction.lastValidBlockHeight = lastValidBlockHeight;
+        transaction.feePayer = publicKey;
+
+        const signature = await sendTransaction(transaction, connection, { minContextSlot });
+
+        await connection.confirmTransaction({ blockhash, lastValidBlockHeight, signature });
+
+        setState({ isLoading: false, error: null, txSignature: signature });
+        return signature;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Transaction failed";
+        setState({ isLoading: false, error: message, txSignature: null });
+        return null;
+      }
+    },
+    [connection, publicKey, sendTransaction]
+  );
+
+  return { state, fundWallet, fundSplToken, reset };
 }
