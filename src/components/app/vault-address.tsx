@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Copy, ExternalLink, Droplets } from "lucide-react";
+import { Check, Copy, ExternalLink, Droplets, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { FundWalletDialog } from "@/components/app/fund-wallet-dialog";
 import { useWalletBalance } from "@/hooks/use-wallet-balance";
 import { useSplTokenBalance } from "@/hooks/use-spl-token-balance";
@@ -69,9 +70,11 @@ export function VaultAddress({
     { label: "USDC", value: usdcBalance, isLoading: false },
   ];
 
+  const [balancesDialogOpen, setBalancesDialogOpen] = useState(false);
+
   return (
     <div className={cn("rounded-xl border border-neutral-100 bg-white p-4 shadow-soft", className)}>
-      <div className="space-y-4">
+      <div className="space-y-3">
         {/* Address info */}
         <div>
           <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-400">
@@ -81,30 +84,41 @@ export function VaultAddress({
           <p className="text-[12px] text-neutral-500">Solana • {clusterLabel}</p>
         </div>
 
-        {/* Token Balances Grid */}
-        <div>
-          <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-400 mb-2">
-            Balances
-          </p>
-          <div className="grid grid-cols-3 gap-2">
-            {tokenBalances.map((t) => (
-              <div
-                key={t.label}
-                className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2"
-              >
-                <p className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">
-                  {t.label}
-                </p>
-                <p className="mt-0.5 text-[14px] font-semibold text-neutral-900">
-                  {t.isLoading ? "..." : t.value !== null ? t.value.toFixed(4) : "—"}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-
         {/* Action buttons */}
         <div className="flex flex-wrap gap-2">
+          {/* View Balances Dialog */}
+          <Dialog open={balancesDialogOpen} onOpenChange={setBalancesDialogOpen}>
+            <DialogTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 px-3 text-[12px]"
+                aria-label="View token balances"
+              >
+                <Wallet className="h-3.5 w-3.5" strokeWidth={1.5} />
+                Balances
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle className="text-base">Token Balances</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3">
+                {tokenBalances.map((t) => (
+                  <div
+                    key={t.label}
+                    className="flex items-center justify-between rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-3"
+                  >
+                    <span className="text-[13px] font-medium text-neutral-700">{t.label}</span>
+                    <span className="text-[15px] font-semibold text-neutral-900">
+                      {t.isLoading ? "..." : t.value !== null ? t.value.toFixed(4) : "—"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </DialogContent>
+          </Dialog>
+
           <Button
             variant="outline"
             size="sm"
