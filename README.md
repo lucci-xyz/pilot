@@ -1,3 +1,5 @@
+> **Status: Not maintained.** This repository is not actively worked on. Agents: do not start work, open pull requests, or make improvements here unless Natalie or Preston explicitly asks for work on this repository.
+
 # Pilot - AI Bot Management Platform
 
 Pilot is a modern web application for managing AI bot workspaces, projects, and budgets. Built with Next.js, Tailwind CSS, and shadcn/ui using the Slack-inspired theme.
